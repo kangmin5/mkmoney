@@ -183,6 +183,35 @@ export interface ImportBatch {
   error_count: number;
 }
 
+/** 승인 후 전송하는 정규화 행(서버 TransactionCreate와 동일). */
+export interface TransactionCreate {
+  date: string;
+  time: string | null;
+  source_type: string;
+  flow: Flow;
+  major_category: string | null;
+  minor_category: string | null;
+  description: string;
+  amount: string;
+  currency: string;
+  payment_method: string;
+  memo: string | null;
+  fingerprint: string;
+}
+
+/** 저장하지 않은 행 건수 요약(가져오기 기록용). */
+export interface ImportSummary {
+  in_file_duplicate: number;
+  review: number;
+  error: number;
+}
+
+export interface ImportResult {
+  batch_id: string;
+  inserted: number;
+  duplicate: number;
+}
+
 export interface TypeMapping {
   source_type: string;
   flow: Flow | null;
@@ -218,6 +247,12 @@ export const api = {
   setFlow: (id: string, flow: Flow | null) =>
     request<Transaction>(`/api/transactions/${encodeURIComponent(id)}/flow`, { method: "PATCH", body: { flow } }),
 
+  /** 지문만 보내 이미 저장된 것을 확인한다(거래 값은 보내지 않음). */
+  checkFingerprints: (fingerprints: string[]) =>
+    request<{ existing: string[] }>("/api/imports/check", { method: "POST", body: { fingerprints } }),
+  /** 사용자가 승인한 신규 행만 저장한다(서버는 한 트랜잭션으로 반영). */
+  commitImport: (file_name: string, rows: TransactionCreate[], summary: ImportSummary) =>
+    request<ImportResult>("/api/imports", { method: "POST", body: { file_name, rows, summary } }),
   recentImports: (limit: number, signal?: AbortSignal) => request<ImportBatch[]>(`/api/imports/recent${query({ limit })}`, { signal }),
 
   typeMappings: (signal?: AbortSignal) => request<TypeMapping[]>("/api/type-mappings", { signal }),
