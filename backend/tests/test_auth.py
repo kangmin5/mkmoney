@@ -42,3 +42,10 @@ def test_session_token_expiry_and_tamper(settings: Settings) -> None:
     assert verify_session_token(settings, token, now=1_000_100)
     assert not verify_session_token(settings, token, now=1_000_000 + settings.session_max_age_seconds + 1)
     assert not verify_session_token(settings, token[:-2] + "xx", now=1_000_100)
+
+
+def test_allowed_origins_accept_json_or_comma_separated(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("MKMONEY_ALLOWED_ORIGINS", "https://a.test/, https://b.test")
+    assert Settings().allowed_origins == ["https://a.test", "https://b.test"]
+    monkeypatch.setenv("MKMONEY_ALLOWED_ORIGINS", '["https://c.test"]')
+    assert Settings().allowed_origins == ["https://c.test"]

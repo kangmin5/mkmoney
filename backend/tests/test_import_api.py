@@ -106,3 +106,9 @@ def test_transactions_are_paginated_and_filtered(authed: TestClient) -> None:
     page = authed.get("/api/transactions", params={"start": "2026-11-01", "end": "2026-11-30", "limit": 2}).json()
     assert page["total"] == 5 and len(page["items"]) == 2 and page["items"][0]["time"] == "04:00:00"
     assert authed.get("/api/transactions", params={"start": "2026-11-02", "end": "2026-11-01"}).status_code == 422
+
+
+def test_empty_major_category_filter_matches_missing_categories(authed: TestClient) -> None:
+    post_import(authed, [make_row(major_category=None), make_row(major_category="", time="01:00:00"), make_row(time="02:00:00")])
+    page = authed.get("/api/transactions", params={"major_category": ""}).json()
+    assert page["total"] == 2

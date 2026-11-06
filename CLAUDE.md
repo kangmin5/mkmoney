@@ -7,6 +7,9 @@
 
 ## Claude 전용 보충 (이 저장소)
 
+- **언어: 사용자와의 대화·진행 상황·요약·질문·완료 보고는 항상 한국어로 쓴다.** 도구 사용 중간 메시지도 한국어로 쓴다.
+  코드 식별자·커밋 메시지는 영어 관례를 따르고, 코드 주석·문서는 한국어를 우선한다.
+
 - 버전은 `x.y.z`, 화면 표시 버전 3곳(`frontend/package.json`·`backend/pyproject.toml`·`backend/app/__init__.py`)은 항상 같아야 한다(`backend/tests/test_health.py`가 검사).
 - 커밋·푸시는 사용자가 요청할 때만 `make release V=x.y.z MSG="요약"`으로 한다(버전 동기화→검증→dev_record 기록→`vX.Y.Z: 요약` 커밋→푸시). 운영 배포가 준비되면 `make ship`.
 - 커밋마다 patch를 올리고, 기능 단위가 끝나면 minor를 올린다.

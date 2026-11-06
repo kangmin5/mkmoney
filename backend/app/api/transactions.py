@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
@@ -40,7 +40,10 @@ def list_transactions(
         conditions.append(Transaction.date <= end)
     if flow:
         conditions.append(Transaction.flow == flow)
-    if major_category is not None:
+    if major_category == "":
+        # 빈 값은 "대분류 없음"(NULL 또는 빈 문자열)을 뜻한다.
+        conditions.append(or_(Transaction.major_category.is_(None), Transaction.major_category == ""))
+    elif major_category is not None:
         conditions.append(Transaction.major_category == major_category)
     if payment_method is not None:
         conditions.append(Transaction.payment_method == payment_method)
