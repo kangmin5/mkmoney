@@ -29,7 +29,7 @@ def list_type_mappings(session: Session) -> list[TypeMappingRead]:
     counts = dict(
         session.execute(
             select(Transaction.source_type, func.count()).group_by(Transaction.source_type)
-        ).tuples().all()
+        ).all()
     )
     saved = load_type_mappings(session)
     names = sorted(set(counts) | set(saved) | set(DEFAULT_TYPE_FLOWS))
@@ -44,6 +44,21 @@ def list_type_mappings(session: Session) -> list[TypeMappingRead]:
     ]
 
 
+def _recompute_auto_flows(session: Session, source_type: str, flow: Flow) -> int:
+    """같은 원본 타입의 auto 행 흐름을 매핑대로 다시 계산한다(manual 행 유지, 커밋 안 함)."""
+    new_flow: ColumnElement[str] | str = flow
+    if flow == "expense":
+        new_flow = case((Transaction.amount > 0, "needs_review"), else_="expense")
+    elif flow == "income":
+        new_flow = case((Transaction.amount < 0, "needs_review"), else_="income")
+    result = session.execute(
+        update(Transaction)
+        .where(Transaction.source_type == source_type, Transaction.flow_source == "auto")
+        .values(flow=new_flow)
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 def save_type_mapping(session: Session, change: TypeMappingUpdate) -> int:
     """
     매핑을 저장하고 같은 원본 타입의 auto 행 흐름을 다시 계산한다(manual 행은 유지).
@@ -55,21 +70,37 @@ def save_type_mapping(session: Session, change: TypeMappingUpdate) -> int:
             .values(source_type=change.source_type, flow=change.flow)
             .on_conflict_do_update(index_elements=["source_type"], set_={"flow": change.flow})
         )
-        new_flow: ColumnElement[str] | str = change.flow
-        if change.flow == "expense":
-            new_flow = case((Transaction.amount > 0, "needs_review"), else_="expense")
-        elif change.flow == "income":
-            new_flow = case((Transaction.amount < 0, "needs_review"), else_="income")
-        result = session.execute(
-            update(Transaction)
-            .where(Transaction.source_type == change.source_type, Transaction.flow_source == "auto")
-            .values(flow=new_flow)
-        )
+        updated = _recompute_auto_flows(session, change.source_type, change.flow)
         session.commit()
     except Exception:
         session.rollback()
         raise
-    return int(getattr(result, "rowcount", 0) or 0)
+    return updated
+
+
+def add_type_mapping_if_absent(session: Session, source_type: str, flow: Flow) -> bool:
+    """저장된 매핑이 없을 때만 추가하고 auto 행을 재계산한다(복원용, 커밋 안 함)."""
+    added = session.execute(
+        insert(TransactionTypeMapping)
+        .values(source_type=source_type, flow=flow)
+        .on_conflict_do_nothing(index_elements=["source_type"])
+        .returning(TransactionTypeMapping.id)
+    ).first()
+    if added is None:
+        return False
+    _recompute_auto_flows(session, source_type, flow)
+    return True
+
+
+def add_payment_mapping_if_absent(session: Session, source_label: str, card_kind: str) -> bool:
+    """저장된 결제수단 매핑이 없을 때만 추가한다(복원용, 커밋 안 함)."""
+    added = session.execute(
+        insert(PaymentMethodMapping)
+        .values(source_label=source_label, card_kind=card_kind)
+        .on_conflict_do_nothing(index_elements=["source_label"])
+        .returning(PaymentMethodMapping.id)
+    ).first()
+    return added is not None
 
 
 def list_payment_mappings(session: Session) -> list[PaymentMethodMappingRead]:
@@ -77,12 +108,12 @@ def list_payment_mappings(session: Session) -> list[PaymentMethodMappingRead]:
     counts = dict(
         session.execute(
             select(Transaction.payment_method, func.count()).group_by(Transaction.payment_method)
-        ).tuples().all()
+        ).all()
     )
     saved = dict(
         session.execute(
             select(PaymentMethodMapping.source_label, PaymentMethodMapping.card_kind)
-        ).tuples().all()
+        ).all()
     )
     return [
         PaymentMethodMappingRead(

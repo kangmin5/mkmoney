@@ -63,7 +63,7 @@ def test_batch_summary_and_flow_source(authed: TestClient, db: Session) -> None:
     post_import(authed, [make_row(), refund], in_file_duplicate=2, review=1, error=3)
     recent = authed.get("/api/imports/recent").json()[0]
     assert (recent["inserted_count"], recent["in_file_duplicate_count"], recent["review_count"], recent["error_count"]) == (2, 2, 1, 3)
-    sources = dict(db.execute(select(Transaction.flow, Transaction.flow_source)).tuples().all())
+    sources = dict(db.execute(select(Transaction.flow, Transaction.flow_source)).all())
     assert sources == {"expense": "auto", "refund": "manual"}
 
 

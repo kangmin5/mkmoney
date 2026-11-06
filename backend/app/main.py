@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import auth, imports, mappings, reports, transactions
+from app.api import auth, backup, imports, mappings, reports, transactions
 from app.config import settings
 from app.security import enforce_transport
 
@@ -30,7 +30,12 @@ def create_app() -> FastAPI:
 
     guarded = [Depends(enforce_transport)]
     for router in (
-        auth.router, imports.router, mappings.router, reports.router, transactions.router
+        auth.router,
+        backup.router,
+        imports.router,
+        mappings.router,
+        reports.router,
+        transactions.router,
     ):
         application.include_router(router, dependencies=guarded)
 

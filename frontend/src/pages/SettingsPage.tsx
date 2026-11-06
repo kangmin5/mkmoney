@@ -1,11 +1,12 @@
 /**
- * 설정: 원본 타입 → 집계 방향, 결제수단 → 카드 종류 매핑. 백업은 Task 8에서 추가한다.
+ * 설정: 원본 타입 → 집계 방향, 결제수단 → 카드 종류 매핑, 암호화 백업·병합 복원.
  * 매핑은 사용자가 고른 값만 저장하며 라벨로 추측하지 않는다.
  */
 import { useState } from "react";
 
 import { api, type PaymentMethodMapping, type TypeMapping } from "../api/client";
 import { useApp } from "../app/AppContext";
+import { BackupPanel } from "../components/BackupPanel";
 import { StatusView } from "../components/StatusView";
 import { type CardKind, type Flow, FLOW_LABELS, FLOWS } from "../domain/transaction";
 import { useAsync } from "../hooks/useAsync";
@@ -57,6 +58,8 @@ export function SettingsPage() {
         </StatusView>
       </section>
 
+      <BackupPanel onRestored={notifyDataChanged} />
+
       <section className="card section" aria-labelledby="about-title">
         <h2 id="about-title">정보</h2>
         <ul className="rows">
@@ -67,10 +70,6 @@ export function SettingsPage() {
           <li className="row">
             <span>데이터 저장 위치</span>
             <span>집 안 서버의 PostgreSQL(브라우저에는 저장하지 않음)</span>
-          </li>
-          <li className="row">
-            <span>암호화 백업·복원</span>
-            <span className="muted">다음 단계에서 제공</span>
           </li>
         </ul>
       </section>

@@ -50,36 +50,13 @@ def commit_import(session: Session, request: ImportRequest) -> ImportResult:
     - 같은 지문은 DB unique 제약(ON CONFLICT DO NOTHING)으로 건너뛴다. 기존 행은 갱신하지 않는다.
     - 흐름이 타입 매핑 결과와 같으면 auto, 다르면 사용자가 검토에서 지정한 manual로 기록한다.
     """
-    for index, row in enumerate(request.rows):
-        if fingerprint_of(row) != row.fingerprint:
-            # 행 번호만 알리고 값은 포함하지 않는다.
-            raise ImportValidationError(f"{index + 1}번째 행의 지문이 일치하지 않습니다.")
-
-    mappings = load_type_mappings(session)
-    values = [
-        {
-            "id": uuid4(),
-            **row.model_dump(),
-            "flow_source": (
-                "auto" if derive_flow(row.source_type, row.amount, mappings) == row.flow else "manual"
-            ),
-        }
-        for row in request.rows
-    ]
+    verify_fingerprints(request.rows)
     try:
-        inserted = 0
-        for start in range(0, len(values), 1000):
-            statement = (
-                insert(Transaction)
-                .values(values[start : start + 1000])
-                .on_conflict_do_nothing(index_elements=["fingerprint"])
-                .returning(Transaction.id)
-            )
-            inserted += len(session.execute(statement).all())
+        inserted = insert_rows(session, request.rows)
         batch = ImportBatch(
             file_name=request.file_name,
             inserted_count=inserted,
-            duplicate_count=len(values) - inserted,
+            duplicate_count=len(request.rows) - inserted,
             in_file_duplicate_count=request.summary.in_file_duplicate,
             review_count=request.summary.review,
             error_count=request.summary.error,
@@ -89,4 +66,41 @@ def commit_import(session: Session, request: ImportRequest) -> ImportResult:
     except Exception:
         session.rollback()
         raise
-    return ImportResult(batch_id=batch.id, inserted=inserted, duplicate=len(values) - inserted)
+    return ImportResult(batch_id=batch.id, inserted=inserted, duplicate=len(request.rows) - inserted)
+
+
+def verify_fingerprints(rows: Sequence[TransactionCreate]) -> None:
+    """모든 행의 지문을 서버에서 다시 계산해 확인한다. 하나라도 다르면 전체 거부."""
+    for index, row in enumerate(rows):
+        if fingerprint_of(row) != row.fingerprint:
+            # 행 번호만 알리고 값은 포함하지 않는다.
+            raise ImportValidationError(f"{index + 1}번째 행의 지문이 일치하지 않습니다.")
+
+
+def insert_rows(session: Session, rows: Sequence[TransactionCreate]) -> int:
+    """
+    현재 트랜잭션 안에서 신규 행만 추가하고 추가된 수를 돌려준다(커밋하지 않음).
+    같은 지문은 ON CONFLICT DO NOTHING으로 건너뛰며 기존 행은 갱신하지 않는다.
+    흐름이 타입 매핑 결과와 같으면 auto, 다르면 사용자가 지정한 manual로 기록한다.
+    """
+    mappings = load_type_mappings(session)
+    values = [
+        {
+            "id": uuid4(),
+            **row.model_dump(),
+            "flow_source": (
+                "auto" if derive_flow(row.source_type, row.amount, mappings) == row.flow else "manual"
+            ),
+        }
+        for row in rows
+    ]
+    inserted = 0
+    for start in range(0, len(values), 1000):
+        statement = (
+            insert(Transaction)
+            .values(values[start : start + 1000])
+            .on_conflict_do_nothing(index_elements=["fingerprint"])
+            .returning(Transaction.id)
+        )
+        inserted += len(session.execute(statement).all())
+    return inserted

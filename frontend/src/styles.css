@@ -263,3 +263,9 @@ select, input[type="date"], input[type="password"], input[type="text"] { min-hei
   .mapping-row__control, .mapping-row__control label, .mapping-row__control select { width: 100%; }
 }
 .card .actions { margin-top: var(--space-4); }
+.backup-form { display: grid; gap: var(--space-3); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--color-border-soft); }
+.backup-form h3 { font-size: var(--text-md); }
+.backup-form p { margin: 0; }
+.backup-form__fields { display: grid; gap: var(--space-3); }
+.backup-form input[type="password"] { max-width: 360px; width: 100%; }
+.restore-preview { display: grid; gap: var(--space-3); }

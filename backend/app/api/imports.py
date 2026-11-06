@@ -34,7 +34,7 @@ def create(body: ImportRequest, session: SessionDep) -> ImportResult:
     try:
         return commit_import(session, body)
     except ImportValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/recent", response_model=list[ImportBatchRead])

@@ -20,7 +20,7 @@ def _range(start: date, end: date) -> None:
     try:
         validate_range(start, end)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/summary", response_model=SummaryResponse)

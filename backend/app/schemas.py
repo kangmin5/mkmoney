@@ -252,3 +252,52 @@ class MonthlyFlow(BaseModel):
     currency: str
     income: Decimal
     net_expense: Decimal
+
+
+# ── 백업·복원 ───────────────────────────────────────────────
+MAX_RESTORE_ROWS = 200_000
+
+
+class BackupTypeMapping(StrictModel):
+    """백업에 담기는 타입 매핑."""
+
+    source_type: str = Field(min_length=1, max_length=120)
+    flow: Flow
+
+
+class BackupPaymentMapping(StrictModel):
+    """백업에 담기는 결제수단 매핑."""
+
+    source_label: str = Field(min_length=1, max_length=200)
+    card_kind: CardKind
+
+
+class BackupPayload(BaseModel):
+    """암호화 전 백업 내용(브라우저가 암호화한다). 버전이 바뀌면 version을 올린다."""
+
+    format: Literal["mkmoney-backup"] = "mkmoney-backup"
+    version: Literal[1] = 1
+    exported_at: datetime
+    app_version: str
+    transactions: list[TransactionCreate]
+    type_mappings: list[BackupTypeMapping]
+    payment_mappings: list[BackupPaymentMapping]
+
+
+class RestoreRequest(StrictModel):
+    """복원 승인 요청: 신규 행과 매핑(없는 것만 추가)."""
+
+    file_name: str = Field(min_length=1, max_length=255)
+    rows: list[TransactionCreate] = Field(max_length=MAX_RESTORE_ROWS)
+    type_mappings: list[BackupTypeMapping] = Field(default_factory=list, max_length=10_000)
+    payment_mappings: list[BackupPaymentMapping] = Field(default_factory=list, max_length=10_000)
+
+
+class RestoreResult(BaseModel):
+    """복원 결과."""
+
+    batch_id: UUID
+    inserted: int
+    duplicate: int
+    type_mappings_added: int
+    payment_mappings_added: int

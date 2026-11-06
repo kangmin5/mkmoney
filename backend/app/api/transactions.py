@@ -32,7 +32,7 @@ def list_transactions(
 ) -> TransactionPage:
     """기간·흐름·분류·결제수단으로 거른 거래를 최신순으로 반환한다(양 끝 날짜 포함)."""
     if start and end and start > end:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "시작일이 종료일보다 늦습니다.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "시작일이 종료일보다 늦습니다.")
     conditions = []
     if start:
         conditions.append(Transaction.date >= start)

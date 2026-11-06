@@ -3,6 +3,7 @@
  * 세션은 HttpOnly 쿠키로만 유지하며, 자격 증명을 브라우저 저장소에 두지 않는다.
  */
 import type { CardKind, Flow } from "../domain/transaction";
+import type { BackupPayload } from "../storage/backup";
 import type { ComparisonMode } from "../domain/periods";
 
 /** 값이 들어가지 않는 API 오류. */
@@ -212,6 +213,14 @@ export interface ImportResult {
   duplicate: number;
 }
 
+export interface RestoreResult {
+  batch_id: string;
+  inserted: number;
+  duplicate: number;
+  type_mappings_added: number;
+  payment_mappings_added: number;
+}
+
 export interface TypeMapping {
   source_type: string;
   flow: Flow | null;
@@ -253,6 +262,11 @@ export const api = {
   /** 사용자가 승인한 신규 행만 저장한다(서버는 한 트랜잭션으로 반영). */
   commitImport: (file_name: string, rows: TransactionCreate[], summary: ImportSummary) =>
     request<ImportResult>("/api/imports", { method: "POST", body: { file_name, rows, summary } }),
+  /** 백업용 전체 데이터(브라우저가 즉시 암호화한다). */
+  exportBackup: () => request<BackupPayload>("/api/backup/export"),
+  /** 승인한 백업 행·매핑 병합(추가만). */
+  restoreBackup: (file_name: string, rows: TransactionCreate[], type_mappings: BackupPayload["type_mappings"], payment_mappings: BackupPayload["payment_mappings"]) =>
+    request<RestoreResult>("/api/backup/restore", { method: "POST", body: { file_name, rows, type_mappings, payment_mappings } }),
   recentImports: (limit: number, signal?: AbortSignal) => request<ImportBatch[]>(`/api/imports/recent${query({ limit })}`, { signal }),
 
   typeMappings: (signal?: AbortSignal) => request<TypeMapping[]>("/api/type-mappings", { signal }),
@@ -262,3 +276,13 @@ export const api = {
   savePaymentMapping: (source_label: string, card_kind: CardKind) =>
     request<PaymentMethodMapping[]>("/api/payment-method-mappings", { method: "PUT", body: { source_label, card_kind } }),
 };
+
+/** 지문을 1만 개씩 나눠 이미 저장된 것을 확인한다(서버 요청 한도 대비). */
+export async function checkAllFingerprints(fingerprints: readonly string[]): Promise<Set<string>> {
+  const existing = new Set<string>();
+  for (let start = 0; start < fingerprints.length; start += 10_000) {
+    const chunk = fingerprints.slice(start, start + 10_000);
+    for (const fp of (await api.checkFingerprints(chunk)).existing) existing.add(fp);
+  }
+  return existing;
+}
