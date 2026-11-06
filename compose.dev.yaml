@@ -1,0 +1,18 @@
+# 개발 전용 PostgreSQL. 운영(compose.yaml)·테스트(compose.test.yaml)와 이름·포트·데이터를 분리한다.
+name: mkmoney-dev
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mkmoney_dev
+      POSTGRES_USER: mkmoney_dev
+      POSTGRES_PASSWORD: mkmoney_dev_only
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - ./pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mkmoney_dev -d mkmoney_dev"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

@@ -10,6 +10,26 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-06-mkmoney-mvp-design.md`
 
+## 계획 수정 사항 (2026-11-07)
+
+구현 착수 전 기존 코드(Task 1·2 완료, Task 3 테스트만 존재), 실제 파일 구조 점검(값 비출력), 전역 개발 규칙을 반영해 아래를 변경한다. 아래 내용이 본문과 충돌하면 이 절을 따른다.
+
+- **R1. Task 0 추가 — 개발 워크플로**: 루트 `Makefile`(`help`, `dev-db`, `test-db-up/down`, `back`, `front`, `test`/`check`, `bump`, `record`, `backup`, `deploy`, `prod-*`, `ship`), `dev_record.md`, 버전 `0.1.0` 시작. 화면 표시 버전은 `frontend/package.json`·`backend/pyproject.toml`·`backend/app/__init__.py` 3곳을 `make bump`로 동기화한다. `make test`는 pytest·ruff·mypy + 프론트 typecheck·vitest·build. mypy는 dev 의존성으로 추가한다. git 저장소가 생겼으므로 커밋은 사용자 요청 시에만 한다.
+- **R2. 테스트 DB 실행 방식**: `compose.test.yaml`은 DB만 띄운다. `make test-db-up` 후 `MKMONEY_TEST_DATABASE_URL`(DB 이름이 `_test`로 끝나야 함)로 pytest를 실행하고, DB 의존 테스트는 매 테스트 후 테이블을 비운다(테스트 DB에서만). URL이 없으면 DB 테스트는 skip.
+- **R3. 원본 파일 구조 반영**: 실제 파일의 날짜·시간·금액은 엑셀 숫자(serial)이고 `타입`은 `수입`·`지출`·`이체`, 통화는 KRW뿐이다. 기본 타입 매핑을 내장한다(`수입→income`, `지출→expense`, `이체→transfer`). 사용자 저장 매핑이 우선한다. **부호가 타입과 맞지 않는 행**(양수 `지출`, 음수 `수입`)은 환불로 추정하지 않고 `needs_review`(코드 `sign_mismatch`)로 두며, 검토 화면에서 사용자가 환불/지출/수입 등으로 지정한다. 흐름 판정은 프론트(`derive_flow`)와 백엔드에 같은 순수 함수로 둔다.
+- **R4. 분류 출처와 재분류**: `transactions.flow_source`(`auto`|`manual`) 열을 추가한다(마이그레이션 `0002`). 타입 매핑을 바꾸면 같은 원본 타입의 `auto` 행은 흐름을 다시 계산하고, 사용자가 행 단위로 지정한 `manual` 행은 유지한다. 가져온 뒤에도 미분류 행을 분류할 수 있게 `PATCH /api/transactions/{id}/flow`를 둔다. 이것은 사용자 분류이며 가져오기로 기존 행을 고치는 것이 아니다.
+- **R5. 가져오기 결과 건수**: `import_batches`에 `in_file_duplicate_count`, `review_count`, `error_count`를 추가한다(마이그레이션 `0002`). 날짜·금액·통화가 잘못된 오류 행은 저장할 수 없으므로 전송하지 않고 건수만 남긴다.
+- **R6. 인증·HTTPS 개발 모드**: 세션 쿠키는 표준 라이브러리 HMAC 서명으로 만든다(새 라이브러리 없음). 기본값은 `Secure` + HTTPS 필수다. 개발용 `MKMONEY_DEV_INSECURE=true`일 때만 localhost의 HTTP를 허용한다. HTTPS 판정은 신뢰 프록시의 `X-Forwarded-Proto`를 사용한다.
+- **R7. 월별 흐름 API 추가**: 대시보드 월별 흐름용 `GET /api/reports/monthly?end=YYYY-MM-DD&months=6`(통화별 월 수익·순지출).
+- **R8. 페이지네이션**: `GET /api/transactions`는 `limit`(최대 200)·`offset`·`total`을 반환한다. 미분류 필터(`flow=needs_review`)를 지원한다.
+- **R9. 파일 검증 한도**: `.xlsx`만, 10MB 이하, 거래 행 20,000행 이하. 초과하면 로컬 오류로 안내한다.
+- **R10. 보안 컨텍스트**: 지문 계산과 백업 암호화는 Web Crypto를 쓰므로 HTTPS 또는 localhost에서만 동작한다. LAN HTTP 접속은 지원하지 않는다고 안내한다.
+- **R11. 결정 필요 — `xlsx` 의존성**: npm의 `xlsx@0.18.5`는 더 이상 npm에 갱신되지 않고 알려진 취약점(프로토타입 오염·ReDoS) 보고가 있다. 사용자 본인 파일만 브라우저에서 파싱하므로 위험은 낮지만, SheetJS 공식 배포처의 최신 버전으로 교체할지는 사용자 결정 사항으로 남긴다.
+- **R12. 배포**: 홈서버에 다른 서비스와 기존 프록시 컨테이너가 이미 있다. Task 9에서 기존 프록시를 재사용할지 확인하고, 승인 전에는 배포·네트워크 변경을 하지 않는다. 운영 데이터 디렉토리와 compose `name:`은 개발·테스트와 분리한다.
+- **R13. 디자인 토큰**: 색상·폰트·간격은 `styles.css`의 `:root` CSS 변수로만 사용하고 컴포넌트에서 하드코딩하지 않는다.
+- **진행 상황(2026-11-07)**: Task 0·1·2·3 완료, Task 4는 백엔드 완료(로그인 화면·API 클라이언트는 Task 6과 함께), Task 5 완료. 남은 작업: Task 4 프론트, 6, 7, 8, 9.
+- **R14. 기준 날짜**: “오늘”과 기본 기간은 `Asia/Seoul` 달력 기준이다. 거래 날짜는 시간대 없는 로컬 날짜로 저장한다.
+
 ## Global Constraints
 
 - Backend: FastAPI; database: PostgreSQL; frontend: Vite + TypeScript.

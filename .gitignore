@@ -7,3 +7,9 @@
 **/.pytest_cache/
 **/node_modules/
 **/dist/
+/pgdata-dev/
+/pgdata-prod/
+/backups/
+.devrec.tmp
+**/.ruff_cache/
+**/.mypy_cache/
