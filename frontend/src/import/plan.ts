@@ -1,7 +1,8 @@
 /**
  * 가져오기 승인 계획(순수 함수). 검토 화면의 선택을 반영해 저장할 행과 요약 건수를 만든다.
  */
-import type { ImportSummary, TransactionCreate } from "../api/client";
+import type { ImportSummary, RuleInput, TransactionCreate } from "../api/client";
+import { firstMatchingRule } from "../domain/rules";
 import { deriveFlow, type Flow } from "../domain/transaction";
 import { buildPreview, type FingerprintedRow, type PreviewRow, type PreviewStatus } from "./preview";
 
@@ -25,8 +26,16 @@ export function reclassify(rows: readonly FingerprintedRow[], mappings: Readonly
 /** 사용자가 행 단위로 지정한 흐름(엑셀 행 번호 → 흐름). */
 export type FlowOverrides = ReadonlyMap<number, Flow>;
 
-/** 검토 화면에 표시할 행: 지정 흐름 반영 후 상태. */
-export type ReviewRow = PreviewRow & { chosenFlow: Flow; overridden: boolean };
+/** 검토 화면에 표시할 행: 규칙 제안·사용자 지정 반영 후 상태. */
+export type ReviewRow = PreviewRow & {
+  chosenFlow: Flow;
+  /** 사용자가 행 단위로 직접 지정했는지 */
+  overridden: boolean;
+  /** 저장할 사용자 분류 이름(규칙 제안) */
+  userCategory: string | null;
+  /** 제안한 규칙 이름(없으면 null) */
+  ruleName: string | null;
+};
 
 /** 저장 대상 상태인지(신규 또는 검토 필요). */
 export function isImportable(status: PreviewStatus): boolean {
@@ -34,14 +43,32 @@ export function isImportable(status: PreviewStatus): boolean {
 }
 
 /**
- * 미리보기에 행 단위 지정을 적용한다. 검토 필요 행에 흐름을 지정하면 신규로 바뀐다.
- * 중복·오류 행은 지정할 수 없다.
+ * 미리보기에 규칙 제안과 행 단위 지정을 적용한다(우선순위: 사용자 지정 > 규칙 > 타입 매핑).
+ * 검토 필요 행에 흐름이 정해지면 신규로 바뀐다. 중복·오류 행은 바꾸지 않는다.
+ * @param rules 사용자 분류 규칙(적용 순서). 일치한 첫 규칙의 흐름·분류 이름을 제안한다.
  */
-export function applyOverrides(rows: readonly FingerprintedRow[], existing: ReadonlySet<string>, overrides: FlowOverrides): ReviewRow[] {
+export function applyOverrides(
+  rows: readonly FingerprintedRow[],
+  existing: ReadonlySet<string>,
+  overrides: FlowOverrides,
+  rules: readonly RuleInput[] = [],
+): ReviewRow[] {
   return buildPreview(rows, existing).map((row) => {
-    const chosen = isImportable(row.status) ? overrides.get(row.sourceRow) : undefined;
-    if (!chosen) return { ...row, chosenFlow: row.flow, overridden: false };
-    return { ...row, chosenFlow: chosen, overridden: true, status: chosen === "needs_review" ? "needs_review" : "new" };
+    const base = { ...row, chosenFlow: row.flow, overridden: false, userCategory: null, ruleName: null };
+    if (!isImportable(row.status)) return base;
+    const chosen = overrides.get(row.sourceRow);
+    if (chosen) {
+      return { ...base, chosenFlow: chosen, overridden: true, status: chosen === "needs_review" ? "needs_review" : "new" };
+    }
+    const rule = firstMatchingRule(rules, { description: row.description, sourceType: row.sourceType, amount: row.amount });
+    if (!rule) return base;
+    return {
+      ...base,
+      chosenFlow: rule.flow,
+      userCategory: rule.user_category,
+      ruleName: rule.name,
+      status: rule.flow === "needs_review" ? "needs_review" : "new",
+    };
   });
 }
 
@@ -75,6 +102,7 @@ export function toTransactionCreate(row: ReviewRow): TransactionCreate {
     currency: row.currency,
     payment_method: row.paymentMethod,
     memo: orNull(row.memo),
+    user_category: row.userCategory,
     fingerprint: row.fingerprint,
   };
 }

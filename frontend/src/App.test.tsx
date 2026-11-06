@@ -34,7 +34,7 @@ describe("App auth gate", () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: /자금 흐름/ })).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "주요 메뉴" });
-    for (const label of ["자금 현황", "거래내역", "분류", "카드 사용", "가져오기", "설정"]) {
+    for (const label of ["자금 현황", "거래내역", "분류", "결제수단", "가져오기", "설정"]) {
       expect(navigation).toHaveTextContent(label);
     }
     expect(screen.getByLabelText(`앱 버전 v${packageJson.version}`)).toHaveTextContent(`v${packageJson.version}`);

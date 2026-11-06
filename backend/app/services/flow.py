@@ -4,8 +4,10 @@ from collections.abc import Mapping
 from decimal import Decimal
 from typing import Literal
 
-Flow = Literal["income", "expense", "transfer", "refund", "needs_review"]
+from app.schemas import Flow
+
 FlowSource = Literal["auto", "manual"]
+__all__ = ["DEFAULT_TYPE_FLOWS", "Flow", "FlowSource", "derive_flow", "mapped_flow"]
 
 DEFAULT_TYPE_FLOWS: dict[str, Flow] = {"수입": "income", "지출": "expense", "이체": "transfer"}
 

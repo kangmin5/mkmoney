@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import auth, backup, imports, mappings, reports, transactions
+from app.api import auth, backup, imports, mappings, reports, rules, transactions
 from app.config import settings
 from app.security import enforce_transport
 
@@ -40,6 +40,7 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
         imports.router,
         mappings.router,
         reports.router,
+        rules.router,
         transactions.router,
     ):
         application.include_router(router, dependencies=guarded)

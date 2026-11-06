@@ -81,6 +81,7 @@ export interface FlowTotals {
   income: string;
   gross_expense: string;
   refund: string;
+  reimbursement: string;
   net_expense: string;
   net_cashflow: string;
 }
@@ -113,6 +114,9 @@ export interface MonthlyFlow {
 
 export interface CategoryTotal {
   currency: string;
+  /** 묶음 기준: 사용자 분류 이름이 있으면 그것, 없으면 원본 대분류 */
+  category: string | null;
+  user_category: string | null;
   major_category: string | null;
   minor_category: string | null;
   total: string;
@@ -158,6 +162,7 @@ export interface Transaction {
   currency: string;
   payment_method: string;
   memo: string | null;
+  user_category: string | null;
 }
 
 export interface TransactionPage {
@@ -172,6 +177,8 @@ export interface TransactionFilters {
   end?: string;
   flow?: Flow;
   major_category?: string;
+  /** 사용자 분류 이름 우선, 없으면 원본 대분류("" = 분류 없음) */
+  category?: string;
   payment_method?: string;
 }
 
@@ -199,6 +206,8 @@ export interface TransactionCreate {
   currency: string;
   payment_method: string;
   memo: string | null;
+  /** 사용자 분류 이름(규칙 제안·사용자 지정). 원본 대·소분류와 별도 */
+  user_category?: string | null;
   fingerprint: string;
 }
 
@@ -221,6 +230,32 @@ export interface RestoreResult {
   duplicate: number;
   type_mappings_added: number;
   payment_mappings_added: number;
+  rules_added: number;
+}
+
+/** 분류 규칙 입력(금액은 십진 문자열, 절댓값 기준). */
+export interface RuleInput {
+  name: string;
+  enabled: boolean;
+  description_contains: string;
+  source_type: string | null;
+  direction: "in" | "out" | "any";
+  min_amount: string | null;
+  max_amount: string | null;
+  flow: Flow;
+  user_category: string | null;
+}
+
+/** 저장된 분류 규칙. */
+export interface Rule extends RuleInput {
+  id: string;
+  position: number;
+}
+
+export interface RuleApplyPreview {
+  matched: number;
+  by_rule: { rule_id: string; name: string; count: number }[];
+  flow_changes: { from_flow: Flow; to_flow: Flow; count: number }[];
 }
 
 export interface TypeMapping {
@@ -247,16 +282,29 @@ export const api = {
     request<SummaryResponse>(`/api/reports/summary${query({ start, end, comparison })}`, { signal }),
   monthly: (end: string, months: number, signal?: AbortSignal) =>
     request<MonthlyFlow[]>(`/api/reports/monthly${query({ end, months })}`, { signal }),
-  categories: (start: string, end: string, flow: "income" | "expense" | "refund", signal?: AbortSignal) =>
+  categories: (start: string, end: string, flow: "income" | "expense" | "refund" | "reimbursement", signal?: AbortSignal) =>
     request<CategoryTotal[]>(`/api/reports/categories${query({ start, end, flow })}`, { signal }),
   cards: (start: string, end: string, signal?: AbortSignal) =>
     request<CardsResponse>(`/api/reports/cards${query({ start, end })}`, { signal }),
 
   transactions: (filters: TransactionFilters, limit: number, offset: number, signal?: AbortSignal) =>
     request<TransactionPage>(`/api/transactions${query({ ...filters, limit, offset })}`, { signal }),
-  /** 행 흐름 지정. null이면 자동(타입 매핑)으로 되돌린다. */
-  setFlow: (id: string, flow: Flow | null) =>
-    request<Transaction>(`/api/transactions/${encodeURIComponent(id)}/flow`, { method: "PATCH", body: { flow } }),
+  /** 행 흐름 지정. null이면 자동(타입 매핑)으로 되돌린다. userCategory를 넘기면 사용자 분류도 바꾼다(null = 지움). */
+  setFlow: (id: string, flow: Flow | null, userCategory?: string | null) =>
+    request<Transaction>(`/api/transactions/${encodeURIComponent(id)}/flow`, {
+      method: "PATCH",
+      body: userCategory === undefined ? { flow } : { flow, user_category: userCategory },
+    }),
+
+  rules: (signal?: AbortSignal) => request<Rule[]>("/api/rules", { signal }),
+  createRule: (rule: RuleInput) => request<Rule[]>("/api/rules", { method: "POST", body: rule }),
+  updateRule: (id: string, rule: RuleInput) => request<Rule[]>(`/api/rules/${encodeURIComponent(id)}`, { method: "PUT", body: rule }),
+  deleteRule: (id: string) => request<Rule[]>(`/api/rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  reorderRules: (ids: string[]) => request<Rule[]>("/api/rules/order", { method: "PUT", body: { ids } }),
+  /** 기존 거래 적용 미리보기(변경 없음). */
+  previewRules: () => request<RuleApplyPreview>("/api/rules/apply/preview", { method: "POST" }),
+  /** 사용자가 승인한 기존 거래 적용. */
+  applyRules: () => request<{ updated: number }>("/api/rules/apply", { method: "POST" }),
 
   /** 지문만 보내 이미 저장된 것을 확인한다(거래 값은 보내지 않음). */
   checkFingerprints: (fingerprints: string[]) =>
@@ -267,8 +315,13 @@ export const api = {
   /** 백업용 전체 데이터(브라우저가 즉시 암호화한다). */
   exportBackup: () => request<BackupPayload>("/api/backup/export"),
   /** 승인한 백업 행·매핑 병합(추가만). */
-  restoreBackup: (file_name: string, rows: TransactionCreate[], type_mappings: BackupPayload["type_mappings"], payment_mappings: BackupPayload["payment_mappings"]) =>
-    request<RestoreResult>("/api/backup/restore", { method: "POST", body: { file_name, rows, type_mappings, payment_mappings } }),
+  restoreBackup: (
+    file_name: string,
+    rows: TransactionCreate[],
+    type_mappings: BackupPayload["type_mappings"],
+    payment_mappings: BackupPayload["payment_mappings"],
+    rules: BackupPayload["rules"],
+  ) => request<RestoreResult>("/api/backup/restore", { method: "POST", body: { file_name, rows, type_mappings, payment_mappings, rules } }),
   recentImports: (limit: number, signal?: AbortSignal) => request<ImportBatch[]>(`/api/imports/recent${query({ limit })}`, { signal }),
 
   typeMappings: (signal?: AbortSignal) => request<TypeMapping[]>("/api/type-mappings", { signal }),

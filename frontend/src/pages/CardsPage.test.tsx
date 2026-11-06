@@ -22,17 +22,18 @@ describe("CardsPage", () => {
   it("groups by saved card kind, subtracts refunds and flags unmapped labels", async () => {
     mockFetch({ "GET /api/reports/cards": () => cards });
     renderWithApp(<CardsPage />);
-    expect(await screen.findByText(/카드 종류가 지정되지 않은 결제수단/)).toBeInTheDocument();
+    expect(await screen.findByText(/종류가 지정되지 않은 결제수단/)).toBeInTheDocument();
+    expect(screen.getByText("카드 합계(신용+체크)")).toBeInTheDocument();
     expect(screen.getByText("신용카드", { selector: "dt" })).toBeInTheDocument();
     expect(screen.getByText("구매 ₩12,000 − 환불 ₩2,000", { selector: ".metric__note" })).toBeInTheDocument();
-    expect(screen.getByLabelText("합성미지정 카드 종류")).toHaveDisplayValue("분류 필요");
+    expect(screen.getByLabelText("합성미지정 결제수단 종류")).toHaveDisplayValue("분류 필요");
   });
 
   it("saves a user-chosen card kind and refreshes shared data", async () => {
     const fetch = mockFetch({ "GET /api/reports/cards": () => cards, "PUT /api/payment-method-mappings": () => [] });
     const { context } = renderWithApp(<CardsPage />);
-    fireEvent.change(await screen.findByLabelText("합성미지정 카드 종류"), { target: { value: "debit" } });
+    fireEvent.change(await screen.findByLabelText("합성미지정 결제수단 종류"), { target: { value: "account" } });
     await waitFor(() => expect(context.notifyDataChanged).toHaveBeenCalled());
-    expect(callsTo(fetch, "PUT", "/api/payment-method-mappings")[0].body).toEqual({ source_label: "합성미지정", card_kind: "debit" });
+    expect(callsTo(fetch, "PUT", "/api/payment-method-mappings")[0].body).toEqual({ source_label: "합성미지정", card_kind: "account" });
   });
 });

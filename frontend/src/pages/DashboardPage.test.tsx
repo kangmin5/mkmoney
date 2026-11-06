@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { callsTo, jsonResponse, mockFetch, renderWithApp } from "../test/helpers";
 import { DashboardPage, periodTitle } from "./DashboardPage";
 
-const totals = (income: string, gross: string, refund: string, net: string, cash: string) => ({
-  income, gross_expense: gross, refund, net_expense: net, net_cashflow: cash,
+const totals = (income: string, gross: string, refund: string, net: string, cash: string, reimbursement = "0") => ({
+  income, gross_expense: gross, refund, reimbursement, net_expense: net, net_cashflow: cash,
 });
 const summary = {
   start: "2026-11-01", end: "2026-11-07", comparison_mode: "same_range",
@@ -80,5 +80,14 @@ describe("DashboardPage", () => {
     expect(periodTitle({ kind: "month", start: "2026-11-01", end: "2026-11-07", comparison: "same_range" }, "2026-11-07")).toBe("이번 달 자금 흐름");
     expect(periodTitle({ kind: "month", start: "2026-10-01", end: "2026-10-31", comparison: "same_range" }, "2026-11-07")).toBe("10월 자금 흐름");
     expect(periodTitle({ kind: "custom", start: "2026-10-01", end: "2026-10-10", comparison: "previous_period" })).toBe("기간 자금 흐름");
+  });
+});
+
+describe("DashboardPage reimbursement", () => {
+  it("explains net expense as gross minus refunds minus reimbursements", async () => {
+    const withReimb = { ...summary, currencies: [{ ...summary.currencies[0], current: totals("0", "30000", "2000", "0", "0", "28000") }] };
+    mockFetch({ ...routes, "GET /api/reports/summary": () => withReimb });
+    renderWithApp(<DashboardPage />);
+    expect(await screen.findByText(/총지출 ₩30,000 − 환불 ₩2,000 − 경비 정산 ₩28,000/)).toBeInTheDocument();
   });
 });

@@ -1,0 +1,19 @@
+{
+  "_comment": "규칙 일치 공유 테스트 벡터(합성). backend/tests/test_rules.py와 frontend/src/domain/rules.test.ts가 함께 읽는다.",
+  "rules": [
+    { "name": "급여", "description_contains": "코어스톤", "source_type": null, "direction": "in", "min_amount": "1000000", "max_amount": null, "flow": "income", "user_category": "급여" },
+    { "name": "경비 정산", "description_contains": "코어스톤", "source_type": null, "direction": "in", "min_amount": null, "max_amount": "1000000", "flow": "reimbursement", "user_category": "회사 경비 정산" },
+    { "name": "합성 구독", "description_contains": "SYNTH", "source_type": "지출", "direction": "out", "min_amount": "0", "max_amount": "50000", "flow": "expense", "user_category": "구독" }
+  ],
+  "cases": [
+    { "description": "(주)코어스톤", "source_type": "이체", "amount": "3000000", "expect": "급여" },
+    { "description": "주식회사 코어스톤 급여", "source_type": "수입", "amount": "1000000", "expect": "급여" },
+    { "description": "(주)코어스톤", "source_type": "이체", "amount": "999999.9999", "expect": "경비 정산" },
+    { "description": "(주)코어스톤", "source_type": "이체", "amount": "-3000000", "expect": null },
+    { "description": "(주)코어스톤", "source_type": "이체", "amount": "0", "expect": null },
+    { "description": "  synth Music  ", "source_type": "지출", "amount": "-9900", "expect": "합성 구독" },
+    { "description": "synth music", "source_type": "이체", "amount": "-9900", "expect": null },
+    { "description": "synth music", "source_type": "지출", "amount": "-50000", "expect": null },
+    { "description": "다른 가게", "source_type": "지출", "amount": "-1000", "expect": null }
+  ]
+}

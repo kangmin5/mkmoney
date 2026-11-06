@@ -135,6 +135,7 @@ function exclusionNote(data: SummaryResponse): string {
 function CurrencyKpis({ summary, label, showCurrency }: { summary: CurrencySummary; label: string; showCurrency: boolean }) {
   const { current, previous, currency } = summary;
   const hasRefund = toUnits(current.refund) !== 0n;
+  const hasReimbursement = toUnits(current.reimbursement) !== 0n;
   return (
     <div className="kpi-block">
       {showCurrency && <h3 className="kpi-block__currency">{currency}</h3>}
@@ -146,9 +147,11 @@ function CurrencyKpis({ summary, label, showCurrency }: { summary: CurrencySumma
           note={
             <>
               {changeNote(current.net_expense, previous.net_expense, label)}
-              {hasRefund && (
+              {(hasRefund || hasReimbursement) && (
                 <span className="metric__sub">
-                  총지출 {formatMoney(current.gross_expense, currency)} − 환불 {formatMoney(current.refund, currency)}
+                  총지출 {formatMoney(current.gross_expense, currency)}
+                  {hasRefund && ` − 환불 ${formatMoney(current.refund, currency)}`}
+                  {hasReimbursement && ` − 경비 정산 ${formatMoney(current.reimbursement, currency)}`}
                 </span>
               )}
             </>
@@ -198,7 +201,7 @@ function TopCategories({ rows }: { rows: CategoryTotal[] }) {
   const totals = new Map<string, { currency: string; major: string; total: bigint }>();
   // 소분류를 대분류로 묶는다. 합산은 정수(최소 단위 1/10000)로 해서 부동소수점 오차를 피한다.
   for (const row of rows) {
-    const major = row.major_category ?? "(대분류 없음)";
+    const major = row.category ?? row.major_category ?? "(분류 없음)";
     const key = `${row.currency}|${major}`;
     const units = toUnits(row.total);
     const prev = totals.get(key);

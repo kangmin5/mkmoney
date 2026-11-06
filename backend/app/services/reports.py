@@ -4,6 +4,7 @@
 - transfer·needs_review는 수익·지출에서 제외한다.
 - 대분류가 `카드대금`인 지출은 구매의 중복 정산이므로 지출·카드 사용액에서 제외한다.
 - refund는 수익이 아니며 순지출·순 카드 사용액에서 차감하고 별도로 표시한다.
+- reimbursement(경비 정산)는 수익이 아니며 순지출에서만 차감하고 별도로 표시한다(결제수단 사용액에서는 차감하지 않음).
 """
 
 from collections import defaultdict
@@ -43,25 +44,28 @@ def _in_range(start: date, end: date) -> ColumnElement[bool]:
 
 
 def totals_by_currency(session: Session, start: date, end: date) -> dict[str, dict[str, Decimal]]:
-    """통화별 수익·총지출·환불·순지출·순현금흐름."""
+    """통화별 수익·총지출·환불·경비 정산·순지출·순현금흐름."""
     rows: Sequence[Any] = session.execute(
         select(
             Transaction.currency,
             _sum_when(Transaction.flow == "income"),
             _sum_when(_is_purchase),
             _sum_when(Transaction.flow == "refund"),
+            _sum_when(Transaction.flow == "reimbursement"),
         )
         .where(_in_range(start, end))
         .group_by(Transaction.currency)
     ).all()
     result: dict[str, dict[str, Decimal]] = {}
-    for currency, income, expense, refund in rows:
-        income, expense, refund = Decimal(income), Decimal(expense), Decimal(refund)
-        net_expense = expense - refund
+    for currency, income, expense, refund, reimbursement in rows:
+        income, expense = Decimal(income), Decimal(expense)
+        refund, reimbursement = Decimal(refund), Decimal(reimbursement)
+        net_expense = expense - refund - reimbursement
         result[currency] = {
             "income": income,
             "gross_expense": expense,
             "refund": refund,
+            "reimbursement": reimbursement,
             "net_expense": net_expense,
             "net_cashflow": income - net_expense,
         }
@@ -84,7 +88,7 @@ def summary(session: Session, start: date, end: date, mode: ComparisonMode) -> d
     prev_start, prev_end = comparison_range(start, end, mode)
     current = totals_by_currency(session, start, end)
     previous = totals_by_currency(session, prev_start, prev_end)
-    keys = ("income", "gross_expense", "refund", "net_expense", "net_cashflow")
+    keys = ("income", "gross_expense", "refund", "reimbursement", "net_expense", "net_cashflow")
     empty = dict.fromkeys(keys, ZERO)
     currencies = sorted(set(current) | set(previous))
     unresolved, transfers, settlements = _counts(session, start, end)
@@ -112,29 +116,43 @@ def summary(session: Session, start: date, end: date, mode: ComparisonMode) -> d
 
 
 def categories(session: Session, start: date, end: date, flow: str) -> list[dict[str, Any]]:
-    """원본 대분류·소분류별 합계(개명·병합 없음). expense는 카드대금 정산 제외."""
+    """
+    분류별 합계. 묶음 기준(category)은 사용자 분류 이름이 있으면 그것, 없으면 원본 대분류다.
+    원본 대·소분류는 개명·병합하지 않고 함께 돌려준다. expense는 카드대금 정산 제외.
+    """
     condition: ColumnElement[bool] = _is_purchase if flow == "expense" else Transaction.flow == flow
+    category = func.coalesce(Transaction.user_category, Transaction.major_category)
     rows: Sequence[Any] = session.execute(
         select(
             Transaction.currency,
+            category,
+            Transaction.user_category,
             Transaction.major_category,
             Transaction.minor_category,
             func.sum(_magnitude),
             func.count(),
         )
         .where(_in_range(start, end), condition)
-        .group_by(Transaction.currency, Transaction.major_category, Transaction.minor_category)
+        .group_by(
+            Transaction.currency,
+            category,
+            Transaction.user_category,
+            Transaction.major_category,
+            Transaction.minor_category,
+        )
         .order_by(Transaction.currency, func.sum(_magnitude).desc())
     ).all()
     return [
         {
             "currency": cur,
+            "category": cat,
+            "user_category": user_cat,
             "major_category": major,
             "minor_category": minor,
             "total": Decimal(total),
             "count": int(count),
         }
-        for cur, major, minor, total, count in rows
+        for cur, cat, user_cat, major, minor, total, count in rows
     ]
 
 
@@ -203,13 +221,14 @@ def monthly(session: Session, end: date, months: int) -> list[dict[str, Any]]:
             _sum_when(Transaction.flow == "income"),
             _sum_when(_is_purchase),
             _sum_when(Transaction.flow == "refund"),
+            _sum_when(Transaction.flow == "reimbursement"),
         )
         .where(_in_range(first, last))
         .group_by(month_key, Transaction.currency)
     ).all()
     found = {
-        (m.strftime("%Y-%m"), cur): (Decimal(i), Decimal(e) - Decimal(r))
-        for m, cur, i, e, r in rows
+        (m.strftime("%Y-%m"), cur): (Decimal(i), Decimal(e) - Decimal(r) - Decimal(rb))
+        for m, cur, i, e, r, rb in rows
     }
     currencies = sorted({cur for _, cur in found}) or []
     result = []

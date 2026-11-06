@@ -7,7 +7,7 @@ import { TransactionsPage } from "./TransactionsPage";
 const tx = (id: string, extra: Record<string, unknown> = {}) => ({
   id, date: "2026-11-06", time: "12:30:00", source_type: "지출", flow: "expense", flow_source: "auto",
   major_category: "식비", minor_category: "점심", description: `합성 거래 ${id}`, amount: "-12000.0000",
-  currency: "KRW", payment_method: "합성카드", memo: null, ...extra,
+  currency: "KRW", payment_method: "합성카드", memo: null, user_category: null, ...extra,
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -43,5 +43,20 @@ describe("TransactionsPage", () => {
     mockFetch({ "GET /api/transactions": () => ({ items: [], total: 0, limit: 50, offset: 0 }) });
     renderWithApp(<TransactionsPage />);
     expect(await screen.findByText("조건에 맞는 거래가 없습니다.")).toBeInTheDocument();
+  });
+});
+
+describe("TransactionsPage user category", () => {
+  it("shows the user category badge and saves a new name without forcing a manual flow", async () => {
+    const fetch = mockFetch({
+      "GET /api/transactions": () => ({ items: [tx("u1", { user_category: null, flow: "transfer", flow_source: "auto" })], total: 1, limit: 50, offset: 0 }),
+      "PATCH /api/transactions/u1/flow": () => tx("u1", { user_category: "급여" }),
+    });
+    const { context } = renderWithApp(<TransactionsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "내 분류 이름 지정" }));
+    fireEvent.change(screen.getByLabelText("내 분류 이름"), { target: { value: " 급여 " } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(context.notifyDataChanged).toHaveBeenCalled());
+    expect(callsTo(fetch, "PATCH", "/api/transactions/u1/flow")[0].body).toEqual({ flow: null, user_category: "급여" });
   });
 });

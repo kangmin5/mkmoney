@@ -16,10 +16,11 @@ async function syntheticPayload(): Promise<BackupPayload> {
     return row;
   };
   return {
-    format: "mkmoney-backup", version: 1, exported_at: "2026-11-07T00:00:00Z", app_version: "0.1.3",
+    format: "mkmoney-backup", version: 2, exported_at: "2026-11-07T00:00:00Z", app_version: "0.1.3",
     transactions: [await make("합성 기존"), await make("합성 신규")],
     type_mappings: [{ source_type: "합성타입", flow: "refund" }],
     payment_mappings: [{ source_label: "합성카드", card_kind: "credit" }],
+    rules: [{ name: "합성 규칙", enabled: true, description_contains: "합성", source_type: null, direction: "any", min_amount: null, max_amount: null, flow: "income", user_category: null }],
   };
 }
 
@@ -55,7 +56,8 @@ describe("BackupPanel", { timeout: 30_000 }, () => {
       "POST /api/imports/check": () => ({ existing: [payload.transactions[0].fingerprint] }),
       "GET /api/type-mappings": () => [{ source_type: "합성타입", flow: null, default_flow: null, transaction_count: 0 }],
       "GET /api/payment-method-mappings": () => [{ source_label: "합성카드", card_kind: "debit", transaction_count: 1 }],
-      "POST /api/backup/restore": () => ({ batch_id: "b", inserted: 1, duplicate: 0, type_mappings_added: 1, payment_mappings_added: 0 }),
+      "GET /api/rules": () => [],
+      "POST /api/backup/restore": () => ({ batch_id: "b", inserted: 1, duplicate: 0, type_mappings_added: 1, payment_mappings_added: 0, rules_added: 1 }),
     });
     render(<BackupPanel onRestored={onRestored} />);
     fireEvent.change(screen.getByLabelText("백업 파일"), { target: { files: [file] } });
@@ -70,6 +72,7 @@ describe("BackupPanel", { timeout: 30_000 }, () => {
     expect(body.rows.map((r) => r.description)).toEqual(["합성 신규"]);
     expect(body.type_mappings).toEqual([{ source_type: "합성타입", flow: "refund" }]);
     expect(body.payment_mappings).toEqual([]);
+    expect((body as unknown as { rules: { name: string }[] }).rules.map((r) => r.name)).toEqual(["합성 규칙"]);
     expect(body.file_name).toBe("백업 복원: mkmoney-backup-2026-11-07.json");
   });
 

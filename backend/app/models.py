@@ -6,6 +6,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -24,16 +25,24 @@ class Base(DeclarativeBase):
     """ORM 기반 클래스."""
 
 
+# 허용 값(CHECK 제약과 코드가 같은 목록을 쓴다). 바꾸면 마이그레이션을 추가한다.
+FLOW_VALUES = ("income", "expense", "transfer", "refund", "reimbursement", "needs_review")
+CARD_KIND_VALUES = ("credit", "debit", "account", "prepaid", "point", "other")
+RULE_DIRECTIONS = ("in", "out", "any")
+
+
+def _in_check(column: str, values: tuple[str, ...]) -> str:
+    """`column IN ('a', 'b')` 형식 CHECK 식."""
+    return f"{column} IN ({', '.join(repr(v) for v in values)})"
+
+
 class Transaction(Base):
     """승인된 정규화 거래. 가져오기는 추가만 하고 기존 행을 수정하지 않는다."""
 
     __tablename__ = "transactions"
     __table_args__ = (
         UniqueConstraint("fingerprint", name="uq_transactions_fingerprint"),
-        CheckConstraint(
-            "flow IN ('income', 'expense', 'transfer', 'refund', 'needs_review')",
-            name="ck_transactions_flow",
-        ),
+        CheckConstraint(_in_check("flow", FLOW_VALUES), name="ck_transactions_flow"),
         CheckConstraint("flow_source IN ('auto', 'manual')", name="ck_transactions_flow_source"),
     )
 
@@ -53,6 +62,8 @@ class Transaction(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     payment_method: Mapped[str] = mapped_column(String(200), nullable=False)
     memo: Mapped[str | None] = mapped_column(String(1000))
+    # 사용자 분류 이름(예: 급여). 원본 대·소분류는 그대로 두고 집계 묶음에만 우선 사용한다.
+    user_category: Mapped[str | None] = mapped_column(String(120))
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
@@ -64,10 +75,7 @@ class TransactionTypeMapping(Base):
 
     __tablename__ = "transaction_type_mappings"
     __table_args__ = (
-        CheckConstraint(
-            "flow IN ('income', 'expense', 'transfer', 'refund', 'needs_review')",
-            name="ck_type_mapping_flow",
-        ),
+        CheckConstraint(_in_check("flow", FLOW_VALUES), name="ck_type_mapping_flow"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -80,12 +88,43 @@ class PaymentMethodMapping(Base):
 
     __tablename__ = "payment_method_mappings"
     __table_args__ = (
-        CheckConstraint("card_kind IN ('credit', 'debit', 'other')", name="ck_payment_card_kind"),
+        CheckConstraint(_in_check("card_kind", CARD_KIND_VALUES), name="ck_payment_card_kind"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     source_label: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     card_kind: Mapped[str] = mapped_column(String(10), nullable=False)
+
+
+class ClassificationRule(Base):
+    """사용자 분류 규칙. 조건이 모두 맞는 첫 규칙(position 오름차순)의 흐름·분류를 제안·적용한다."""
+
+    __tablename__ = "classification_rules"
+    __table_args__ = (
+        CheckConstraint(_in_check("flow", FLOW_VALUES), name="ck_rule_flow"),
+        CheckConstraint(_in_check("direction", RULE_DIRECTIONS), name="ck_rule_direction"),
+        CheckConstraint(
+            "min_amount IS NULL OR min_amount >= 0", name="ck_rule_min_amount_nonnegative"
+        ),
+        CheckConstraint(
+            "max_amount IS NULL OR max_amount > 0", name="ck_rule_max_amount_positive"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    description_contains: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_type: Mapped[str | None] = mapped_column(String(120))
+    direction: Mapped[str] = mapped_column(String(3), nullable=False, default="any")
+    min_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    max_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    flow: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_category: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
 
 
 class ImportBatch(Base):

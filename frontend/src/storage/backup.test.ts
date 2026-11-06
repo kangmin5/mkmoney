@@ -14,10 +14,11 @@ async function tx(description: string, extra: Partial<BackupPayload['transaction
 
 async function payload(): Promise<BackupPayload> {
   return {
-    format: 'mkmoney-backup', version: 1, exported_at: '2026-11-07T00:00:00Z', app_version: '0.1.3',
+    format: 'mkmoney-backup', version: 2, exported_at: '2026-11-07T00:00:00Z', app_version: '0.1.3',
     transactions: [await tx('합성 비밀 가게')],
     type_mappings: [{ source_type: '합성타입', flow: 'refund' }],
     payment_mappings: [{ source_label: '합성카드', card_kind: 'credit' }],
+    rules: [{ name: '합성 규칙', enabled: true, description_contains: '합성', source_type: null, direction: 'in', min_amount: '1000', max_amount: null, flow: 'income', user_category: '급여' }],
   };
 }
 
@@ -86,10 +87,25 @@ describe('restore plan', () => {
       payment_mappings: [{ source_label: '합성카드', card_kind: 'debit' }] };
     const valid = await verifyBackupFingerprints(data.transactions);
     expect(valid).toEqual([true, true, true, true, false]);
-    const plan = planRestore(data, valid, new Set([c.fingerprint]), new Set(['있음']), new Set(['합성카드']));
+    const plan = planRestore(data, valid, new Set([c.fingerprint]), new Set(['있음']), new Set(['합성카드']), new Set(['합성 규칙']));
+    expect(plan.rules).toEqual([]);
     expect(plan.rows.map((r) => r.description)).toEqual(['합성 A', '합성 B']);
     expect([plan.total, plan.existing, plan.duplicateInBackup, plan.damaged]).toEqual([5, 1, 1, 1]);
     expect(plan.typeMappings).toEqual([{ source_type: '없음', flow: 'refund' }]);
     expect(plan.paymentMappings).toEqual([]);
+  });
+});
+
+describe('backup versions', { timeout: 30_000 }, () => {
+  it('still restores version 1 backups without rules or user categories', async () => {
+    const { rules: _ignored, ...v1 } = { ...(await payload()), version: 1 as const };
+    const decrypted = await decryptBackup(await encryptBackup(v1 as unknown as BackupPayload, PASS), PASS);
+    expect(decrypted.version).toBe(1);
+    expect(decrypted.rules).toEqual([]);
+  });
+
+  it('rejects malformed rules in version 2', async () => {
+    const bad = { ...(await payload()), rules: [{ name: '', flow: 'income' }] };
+    await expect(decryptBackup(await encryptBackup(bad as unknown as BackupPayload, PASS), PASS)).rejects.toMatchObject({ code: 'malformed' });
   });
 });

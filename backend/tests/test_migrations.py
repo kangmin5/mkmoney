@@ -25,3 +25,24 @@ def test_migration_up_and_down_on_explicit_test_database() -> None:
     # 다른 테스트가 쓰는 스키마를 복구한다.
     command.upgrade(config, "head")
     engine.dispose()
+
+
+@pytest.mark.skipif(not os.getenv("MKMONEY_TEST_DATABASE_URL"), reason="requires disposable PostgreSQL test database")
+def test_0003_downgrade_refuses_when_new_values_exist() -> None:
+    from sqlalchemy import text
+
+    url = os.environ["MKMONEY_TEST_DATABASE_URL"]
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE transactions, import_batches, transaction_type_mappings, payment_method_mappings, classification_rules"))
+        conn.execute(text("INSERT INTO payment_method_mappings (id, source_label, card_kind) VALUES (gen_random_uuid(), '합성통장', 'account')"))
+    with pytest.raises(RuntimeError):
+        command.downgrade(config, "0002_flow_source_counts")
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE payment_method_mappings"))
+    command.downgrade(config, "0002_flow_source_counts")
+    command.upgrade(config, "head")
+    engine.dispose()

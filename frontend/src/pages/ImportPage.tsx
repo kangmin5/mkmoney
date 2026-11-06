@@ -4,7 +4,7 @@
  */
 import { type ChangeEvent, useMemo, useState } from "react";
 
-import { api, type ImportResult } from "../api/client";
+import { api, type ImportResult, type Rule } from "../api/client";
 import { useApp } from "../app/AppContext";
 import { ReviewList } from "../components/ReviewList";
 import { StatusView } from "../components/StatusView";
@@ -34,7 +34,11 @@ type Stage =
 /** 가져오기 화면. */
 export function ImportPage() {
   const { notifyDataChanged, navigate } = useApp();
-  const mappingsState = useAsync((signal) => api.typeMappings(signal), []);
+  // 타입 매핑과 분류 규칙을 함께 불러온다(규칙은 검토 화면에서 제안으로 쓴다).
+  const mappingsState = useAsync(async (signal) => {
+    const [types, rules] = await Promise.all([api.typeMappings(signal), api.rules(signal)]);
+    return { types, rules };
+  }, []);
   const [savedMappings, setSavedMappings] = useState<Record<string, Flow> | null>(null);
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [overrides, setOverrides] = useState<Map<number, Flow>>(new Map());
@@ -44,8 +48,9 @@ export function ImportPage() {
   const mappings = useMemo<Record<string, Flow>>(() => {
     if (savedMappings) return savedMappings;
     if (mappingsState.status !== "success") return {};
-    return Object.fromEntries(mappingsState.data.filter((m) => m.flow).map((m) => [m.source_type, m.flow as Flow]));
+    return Object.fromEntries(mappingsState.data.types.filter((m) => m.flow).map((m) => [m.source_type, m.flow as Flow]));
   }, [savedMappings, mappingsState]);
+  const rules = useMemo<Rule[]>(() => (mappingsState.status === "success" ? mappingsState.data.rules : []), [mappingsState]);
 
   const reset = () => {
     setStage({ kind: "idle" });
@@ -118,6 +123,7 @@ export function ImportPage() {
         <ReviewStage
           data={stage.data}
           mappings={mappings}
+          rules={rules}
           overrides={overrides}
           committing={stage.kind === "committing"}
           commitError={stage.kind === "review" ? stage.commitError : undefined}
@@ -137,7 +143,7 @@ export function ImportPage() {
           onCancel={reset}
           onApprove={async () => {
             const data = stage.data;
-            const plan = planCommit(applyOverrides(data.rows, data.existing, overrides));
+            const plan = planCommit(applyOverrides(data.rows, data.existing, overrides, rules));
             setStage({ kind: "committing", data });
             try {
               const result = await api.commitImport(data.fileName, plan.rows, plan.summary);
@@ -186,6 +192,7 @@ export function ImportPage() {
 interface ReviewStageProps {
   data: ReviewData;
   mappings: Record<string, Flow>;
+  rules: Rule[];
   overrides: Map<number, Flow>;
   committing: boolean;
   commitError?: string;
@@ -196,8 +203,9 @@ interface ReviewStageProps {
 }
 
 /** 검토 단계: 파일·시트, 건수, 규칙 안내, 모르는 타입 매핑, 미리보기, 승인. */
-function ReviewStage({ data, mappings, overrides, committing, commitError, onChooseFlow, onMappingSaved, onCancel, onApprove }: ReviewStageProps) {
-  const rows = useMemo(() => applyOverrides(data.rows, data.existing, overrides), [data, overrides]);
+function ReviewStage({ data, mappings, rules, overrides, committing, commitError, onChooseFlow, onMappingSaved, onCancel, onApprove }: ReviewStageProps) {
+  const rows = useMemo(() => applyOverrides(data.rows, data.existing, overrides, rules), [data, overrides, rules]);
+  const ruleHits = rows.filter((r) => r.ruleName && !r.overridden).length;
   const counts = useMemo(() => countReview(rows), [rows]);
   const unknownTypes = useMemo(
     () => [...new Set(data.rows.filter((r) => r.validationCodes.includes("unknown_type")).map((r) => r.sourceType))].sort(),
@@ -229,6 +237,12 @@ function ReviewStage({ data, mappings, overrides, committing, commitError, onCho
       <div className="notice notice--warn" role="note">
         중복 판정: 날짜·시간·타입·금액·화폐·결제수단·내용이 모두 같은 거래는 건너뜁니다. 대분류·소분류·메모가 달라도 기존 거래는 수정하지 않습니다.
       </div>
+
+      {ruleHits > 0 && (
+        <p className="basis">
+          분류 규칙으로 {ruleHits}건의 흐름·분류 이름을 제안했습니다. 행마다 바꿀 수 있고, 승인해야 저장됩니다.
+        </p>
+      )}
 
       {unknownTypes.length > 0 && <UnknownTypes types={unknownTypes} mappings={mappings} onSaved={onMappingSaved} disabled={committing} />}
 

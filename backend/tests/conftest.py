@@ -23,7 +23,7 @@ from app.services.fingerprint import compute_fingerprint
 
 TEST_PASSWORD = "synthetic-test-password"
 ORIGIN = "https://testserver"
-TABLES = "transactions, import_batches, transaction_type_mappings, payment_method_mappings"
+TABLES = "transactions, import_batches, transaction_type_mappings, payment_method_mappings, classification_rules"
 
 
 def alembic_config(url: str) -> Config:

@@ -4,13 +4,15 @@
  * - 암호화: AES-GCM-256, 매번 새 12바이트 nonce, 파일 머리(형식·버전·매개변수)를 추가 인증 데이터로 묶음
  * 암호를 잊으면 복구할 수 없다.
  */
-import type { TransactionCreate } from "../api/client";
+import type { RuleInput, TransactionCreate } from "../api/client";
 import { FLOWS, type CardKind, type Flow } from "../domain/transaction";
 
 export const ENVELOPE_FORMAT = "mkmoney-backup-encrypted";
 export const ENVELOPE_VERSION = 1;
 export const PAYLOAD_FORMAT = "mkmoney-backup";
-export const PAYLOAD_VERSION = 1;
+export const PAYLOAD_VERSION = 2;
+/** 복원 시 받는 내용 버전(v1: 규칙·사용자 분류 없음). */
+export const SUPPORTED_PAYLOAD_VERSIONS: readonly number[] = [1, 2];
 export const PBKDF2_ITERATIONS = 600_000;
 export const MIN_PASSPHRASE_LENGTH = 10;
 export const MAX_BACKUP_BYTES = 200 * 1024 * 1024;
@@ -20,12 +22,14 @@ const ITERATION_RANGE = [100_000, 5_000_000] as const;
 /** 백업 내용(서버 /api/backup/export 응답과 같은 형태). */
 export interface BackupPayload {
   format: typeof PAYLOAD_FORMAT;
-  version: typeof PAYLOAD_VERSION;
+  version: 1 | 2;
   exported_at: string;
   app_version: string;
   transactions: TransactionCreate[];
   type_mappings: { source_type: string; flow: Flow }[];
   payment_mappings: { source_label: string; card_kind: CardKind }[];
+  /** v2부터. v1 백업은 빈 배열로 읽는다. */
+  rules: RuleInput[];
 }
 
 /** 암호화 파일 머리. */
@@ -143,7 +147,22 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}:\d{2}$/;
 const AMOUNT_RE = /^-?\d{1,16}(\.\d{1,4})?$/;
 const FINGERPRINT_RE = /^[a-f0-9]{64}$/;
-const CARD_KINDS: readonly string[] = ["credit", "debit", "other"];
+const CARD_KIND_VALUES: readonly string[] = ["credit", "debit", "account", "prepaid", "point", "other"];
+const DECIMAL_RE = /^\d{1,16}(\.\d{1,4})?$/;
+
+/** 규칙 한 건이 서버 스키마에 맞는지. */
+function isRule(value: unknown): value is RuleInput {
+  if (!isRecord(value)) return false;
+  const optionalAmount = (v: unknown) => v === null || v === undefined || (typeof v === "string" && DECIMAL_RE.test(v));
+  return (
+    requiredText(value.name, 80) && typeof value.enabled === "boolean" && requiredText(value.description_contains, 200) &&
+    (value.source_type === null || value.source_type === undefined || requiredText(value.source_type, 120)) &&
+    typeof value.direction === "string" && ["in", "out", "any"].includes(value.direction) &&
+    optionalAmount(value.min_amount) && optionalAmount(value.max_amount) &&
+    typeof value.flow === "string" && (FLOWS as readonly string[]).includes(value.flow) &&
+    (value.user_category === null || value.user_category === undefined || requiredText(value.user_category, 120))
+  );
+}
 
 const optionalText = (value: unknown, max: number): boolean => value === null || (typeof value === "string" && value.length <= max);
 const requiredText = (value: unknown, max: number): boolean => typeof value === "string" && value.length >= 1 && value.length <= max;
@@ -161,6 +180,7 @@ function isTransaction(value: unknown): value is TransactionCreate {
     typeof value.amount === "string" && AMOUNT_RE.test(value.amount) &&
     typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency) &&
     requiredText(value.payment_method, 200) && optionalText(value.memo, 1000) &&
+    (value.user_category === undefined || value.user_category === null || requiredText(value.user_category, 120)) &&
     typeof value.fingerprint === "string" && FINGERPRINT_RE.test(value.fingerprint)
   );
 }
@@ -171,7 +191,9 @@ function isTransaction(value: unknown): value is TransactionCreate {
  */
 export function validatePayload(raw: unknown): BackupPayload {
   if (!isRecord(raw) || raw.format !== PAYLOAD_FORMAT) throw new BackupError("malformed", "백업 내용 형식이 올바르지 않습니다.");
-  if (raw.version !== PAYLOAD_VERSION) throw new BackupError("unsupported", "지원하지 않는 백업 내용 버전입니다.");
+  if (typeof raw.version !== "number" || !SUPPORTED_PAYLOAD_VERSIONS.includes(raw.version)) {
+    throw new BackupError("unsupported", "지원하지 않는 백업 내용 버전입니다.");
+  }
   if (!Array.isArray(raw.transactions) || !Array.isArray(raw.type_mappings) || !Array.isArray(raw.payment_mappings)) {
     throw new BackupError("malformed", "백업 내용 형식이 올바르지 않습니다.");
   }
@@ -184,18 +206,24 @@ export function validatePayload(raw: unknown): BackupPayload {
     }
   }
   for (const m of raw.payment_mappings) {
-    if (!isRecord(m) || !requiredText(m.source_label, 200) || typeof m.card_kind !== "string" || !CARD_KINDS.includes(m.card_kind)) {
+    if (!isRecord(m) || !requiredText(m.source_label, 200) || typeof m.card_kind !== "string" || !CARD_KIND_VALUES.includes(m.card_kind)) {
       throw new BackupError("malformed", "백업의 결제수단 매핑 형식이 올바르지 않습니다.");
     }
   }
+  const rules = raw.rules === undefined ? [] : raw.rules;
+  if (!Array.isArray(rules) || !rules.every(isRule)) throw new BackupError("malformed", "백업의 분류 규칙 형식이 올바르지 않습니다.");
   return {
     format: PAYLOAD_FORMAT,
-    version: PAYLOAD_VERSION,
+    version: raw.version as 1 | 2,
     exported_at: typeof raw.exported_at === "string" ? raw.exported_at : "",
     app_version: typeof raw.app_version === "string" ? raw.app_version : "",
     transactions: raw.transactions as TransactionCreate[],
     type_mappings: raw.type_mappings as BackupPayload["type_mappings"],
     payment_mappings: raw.payment_mappings as BackupPayload["payment_mappings"],
+    rules: rules.map((r) => ({
+      name: r.name, enabled: r.enabled, description_contains: r.description_contains, source_type: r.source_type ?? null,
+      direction: r.direction, min_amount: r.min_amount ?? null, max_amount: r.max_amount ?? null, flow: r.flow, user_category: r.user_category ?? null,
+    })),
   };
 }
 

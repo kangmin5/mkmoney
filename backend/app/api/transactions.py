@@ -26,6 +26,7 @@ def list_transactions(
     end: date | None = None,
     flow: Flow | None = None,
     major_category: Annotated[str | None, Query(max_length=120)] = None,
+    category: Annotated[str | None, Query(max_length=120)] = None,
     payment_method: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -45,6 +46,12 @@ def list_transactions(
         conditions.append(or_(Transaction.major_category.is_(None), Transaction.major_category == ""))
     elif major_category is not None:
         conditions.append(Transaction.major_category == major_category)
+    # category: 사용자 분류 이름 우선, 없으면 원본 대분류(분류 화면의 묶음과 같은 기준). 빈 값은 "분류 없음".
+    shown = func.coalesce(Transaction.user_category, Transaction.major_category)
+    if category == "":
+        conditions.append(or_(shown.is_(None), shown == ""))
+    elif category is not None:
+        conditions.append(shown == category)
     if payment_method is not None:
         conditions.append(Transaction.payment_method == payment_method)
     total = session.scalar(select(func.count()).select_from(Transaction).where(*conditions)) or 0
@@ -68,15 +75,18 @@ def list_transactions(
 @router.patch("/{transaction_id}/flow", response_model=TransactionRead)
 def update_flow(transaction_id: UUID, body: FlowUpdate, session: SessionDep) -> TransactionRead:
     """
-    사용자가 행의 흐름을 지정한다(예: 양수 지출을 환불로). 원본 값은 바꾸지 않는다.
-    flow가 null이면 자동(타입 매핑) 판정으로 되돌린다.
+    사용자가 행의 흐름·사용자 분류를 지정한다(예: 양수 지출을 환불로). 원본 값은 바꾸지 않는다.
+    flow가 null이면 자동(타입 매핑) 판정으로 되돌린다. user_category는 보낸 경우에만 바꾼다(null이면 지움).
     """
     row = session.get(Transaction, transaction_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "거래를 찾을 수 없습니다.")
+    if "user_category" in body.model_fields_set:
+        row.user_category = body.user_category
     if body.flow is None:
         row.flow = derive_flow(row.source_type, row.amount, load_type_mappings(session))
-        row.flow_source = "auto"
+        # 사용자 분류가 남아 있으면 사용자가 정한 행이므로 manual을 유지한다.
+        row.flow_source = "auto" if row.user_category is None else "manual"
     else:
         row.flow = body.flow
         row.flow_source = "manual"

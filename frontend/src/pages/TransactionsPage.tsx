@@ -30,7 +30,7 @@ export function TransactionsPage() {
     [period.start, period.end, transactionFilters, page, dataVersion],
   );
 
-  const removeFilter = (key: "major_category" | "payment_method") => {
+  const removeFilter = (key: "major_category" | "payment_method" | "category") => {
     const next = { ...transactionFilters };
     delete next[key];
     setTransactionFilters(next);
@@ -64,6 +64,11 @@ export function TransactionsPage() {
         {transactionFilters.major_category !== undefined && (
           <button type="button" className="chip" onClick={() => removeFilter("major_category")} aria-label={`대분류 필터 ${transactionFilters.major_category} 해제`}>
             대분류: {transactionFilters.major_category || "(없음)"} ✕
+          </button>
+        )}
+        {transactionFilters.category !== undefined && (
+          <button type="button" className="chip" onClick={() => removeFilter("category")} aria-label={`분류 필터 ${transactionFilters.category} 해제`}>
+            분류: {transactionFilters.category || "(없음)"} ✕
           </button>
         )}
         {transactionFilters.payment_method !== undefined && (
@@ -106,6 +111,20 @@ function TransactionItem({ tx, onChanged }: { tx: Transaction; onChanged: () => 
     }
   };
   const category = [tx.major_category, tx.minor_category].filter(Boolean).join(" · ");
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(tx.user_category ?? "");
+  const saveName = async (value: string | null) => {
+    setSaving("saving");
+    try {
+      // 흐름은 그대로 둔다: 직접 지정한 흐름은 유지하고, 자동 흐름은 null(자동)로 보내 타입 매핑을 계속 따르게 한다.
+      await api.setFlow(tx.id, tx.flow_source === "manual" ? tx.flow : null, value);
+      setSaving("idle");
+      setEditing(false);
+      onChanged();
+    } catch (error) {
+      setSaving({ error: error instanceof Error ? error.message : "저장하지 못했습니다." });
+    }
+  };
   return (
     <li className={`tx tx--${tx.flow}`}>
       <div className="tx__when">
@@ -113,12 +132,45 @@ function TransactionItem({ tx, onChanged }: { tx: Transaction; onChanged: () => 
         {tx.time && <span className="muted">{tx.time.slice(0, 5)}</span>}
       </div>
       <div className="tx__main">
-        <span className="tx__desc">{tx.description}</span>
+        <span className="tx__desc">
+          {tx.description}
+          {tx.user_category && <span className="tag tag--user">{tx.user_category}</span>}
+        </span>
         <span className="muted">
           {tx.source_type}
           {category && ` · ${category}`} · {tx.payment_method}
         </span>
         {tx.memo && <span className="muted tx__memo">{tx.memo}</span>}
+        {editing ? (
+          <form
+            className="inline-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = name.trim();
+              void saveName(value ? value : null);
+            }}
+          >
+            <label>
+              <span className="visually-hidden">내 분류 이름</span>
+              <input type="text" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="예: 급여" autoFocus />
+            </label>
+            <button type="submit" className="btn" disabled={saving === "saving"}>
+              저장
+            </button>
+            {tx.user_category && (
+              <button type="button" className="btn btn--ghost" onClick={() => void saveName(null)} disabled={saving === "saving"}>
+                지우기
+              </button>
+            )}
+            <button type="button" className="btn btn--ghost" onClick={() => setEditing(false)}>
+              취소
+            </button>
+          </form>
+        ) : (
+          <button type="button" className="link-button" onClick={() => setEditing(true)}>
+            {tx.user_category ? "내 분류 이름 바꾸기" : "내 분류 이름 지정"}
+          </button>
+        )}
       </div>
       <div className="tx__amount">{formatMoney(tx.amount, tx.currency)}</div>
       <label className="tx__flow">

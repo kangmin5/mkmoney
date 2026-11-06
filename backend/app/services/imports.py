@@ -81,7 +81,7 @@ def insert_rows(session: Session, rows: Sequence[TransactionCreate]) -> int:
     """
     현재 트랜잭션 안에서 신규 행만 추가하고 추가된 수를 돌려준다(커밋하지 않음).
     같은 지문은 ON CONFLICT DO NOTHING으로 건너뛰며 기존 행은 갱신하지 않는다.
-    흐름이 타입 매핑 결과와 같으면 auto, 다르면 사용자가 지정한 manual로 기록한다.
+    흐름이 타입 매핑 결과와 같고 사용자 분류가 없으면 auto, 아니면(검토·규칙으로 지정) manual로 기록한다.
     """
     mappings = load_type_mappings(session)
     values = [
@@ -89,7 +89,10 @@ def insert_rows(session: Session, rows: Sequence[TransactionCreate]) -> int:
             "id": uuid4(),
             **row.model_dump(),
             "flow_source": (
-                "auto" if derive_flow(row.source_type, row.amount, mappings) == row.flow else "manual"
+                "auto"
+                if row.user_category is None
+                and derive_flow(row.source_type, row.amount, mappings) == row.flow
+                else "manual"
             ),
         }
         for row in rows

@@ -15,7 +15,7 @@ export const ROUTES: readonly { route: Route; label: string; short: string }[] =
   { route: "dashboard", label: "자금 현황", short: "현황" },
   { route: "transactions", label: "거래내역", short: "거래" },
   { route: "categories", label: "분류", short: "분류" },
-  { route: "cards", label: "카드 사용", short: "카드" },
+  { route: "cards", label: "결제수단", short: "결제" },
   { route: "import", label: "가져오기", short: "가져오기" },
   { route: "settings", label: "설정", short: "설정" },
 ];

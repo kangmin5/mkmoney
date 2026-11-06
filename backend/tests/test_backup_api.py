@@ -34,7 +34,7 @@ def test_export_contains_rows_and_user_mappings(authed: TestClient) -> None:
     response = authed.get("/api/backup/export")
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
-    assert (payload["format"], payload["version"]) == ("mkmoney-backup", 1)
+    assert (payload["format"], payload["version"]) == ("mkmoney-backup", 2)
     assert len(payload["transactions"]) == 3
     assert {t["flow"] for t in payload["transactions"]} == {"expense", "refund", "transfer"}
     assert payload["type_mappings"] == [{"source_type": "합성타입", "flow": "transfer"}]
@@ -76,3 +76,22 @@ def test_restore_is_atomic_on_tampered_rows(authed: TestClient, db: Session) -> 
     assert response.status_code == 422
     assert db.scalar(select(func.count()).select_from(Transaction)) == 3
     assert db.scalar(select(func.count()).select_from(TransactionTypeMapping)) == 1
+
+
+def test_backup_v2_carries_rules_and_user_categories_and_v1_still_restores(authed: TestClient, db: Session) -> None:
+    rule = {"name": "합성 규칙", "description_contains": "합성", "direction": "any", "flow": "income", "user_category": "급여"}
+    authed.post("/api/rules", json=rule)
+    assert authed.post("/api/imports", json={"file_name": "x.xlsx", "rows": [make_row(user_category="급여", flow="income", amount="10", source_type="수입")]}).status_code == 201
+    payload = authed.get("/api/backup/export").json()
+    assert payload["version"] == 2 and payload["rules"][0]["name"] == "합성 규칙"
+    assert payload["transactions"][0]["user_category"] == "급여"
+    db.execute(text(f"TRUNCATE {TABLES}"))
+    db.commit()
+    result = authed.post("/api/backup/restore", json={"file_name": "b", "rows": payload["transactions"], "type_mappings": [], "payment_mappings": [], "rules": payload["rules"]}).json()
+    assert (result["inserted"], result["rules_added"]) == (1, 1)
+    again = authed.post("/api/backup/restore", json={"file_name": "b", "rows": [], "type_mappings": [], "payment_mappings": [], "rules": [{**rule, "flow": "expense"}]}).json()
+    assert again["rules_added"] == 0  # 같은 이름은 기존 규칙 유지
+    assert authed.get("/api/rules").json()[0]["flow"] == "income"
+    v1_row = {k: v for k, v in make_row(time="23:00:00").items()}
+    v1 = authed.post("/api/backup/restore", json={"file_name": "v1", "rows": [v1_row], "type_mappings": [], "payment_mappings": []})
+    assert v1.status_code == 200 and v1.json()["inserted"] == 1

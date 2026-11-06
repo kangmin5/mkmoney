@@ -37,7 +37,7 @@ def categories(
     session: SessionDep,
     start: date,
     end: date,
-    flow: Literal["income", "expense", "refund"] = "expense",
+    flow: Literal["income", "expense", "refund", "reimbursement"] = "expense",
 ) -> list[dict[str, Any]]:
     """원본 대·소분류별 합계."""
     _range(start, end)

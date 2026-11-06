@@ -269,3 +269,17 @@ select, input[type="date"], input[type="password"], input[type="text"] { min-hei
 .backup-form__fields { display: grid; gap: var(--space-3); }
 .backup-form input[type="password"] { max-width: 360px; width: 100%; }
 .restore-preview { display: grid; gap: var(--space-3); }
+.tag--user { margin-left: var(--space-2); vertical-align: middle; font-family: var(--font-sans); font-weight: 600; color: var(--color-accent-strong); }
+.inline-form { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-1); }
+.inline-form input { min-width: 0; flex: 1 1 140px; }
+.link-button { justify-self: start; min-height: var(--touch); padding: 0; border: 0; background: none; color: var(--color-accent-strong); font-size: var(--text-sm); text-decoration: underline; cursor: pointer; }
+.rule-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
+.rule { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border-soft); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
+.rule--disabled { opacity: 0.6; }
+.rule__main { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.rule__actions { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.rule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.rule-form .field input, .rule-form .field select { width: 100%; }
+.rule-form .actions, .rule-form .field-error { grid-column: 1 / -1; }
+input[type="checkbox"] { width: 22px; height: 22px; }
+@media (max-width: 760px) { .rule-form { grid-template-columns: 1fr; } }

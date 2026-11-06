@@ -125,6 +125,12 @@ function ReviewItem({ row, onChooseFlow, disabled }: { row: ReviewRow; onChooseF
         </span>
         <span className="tags">
           <span className={`tag tag--status-${row.status}`}>{STATUS_LABELS[row.status]}</span>
+          {row.ruleName && !row.overridden && (
+            <span className="tag tag--user">
+              규칙: {row.ruleName}
+              {row.userCategory && ` → ${row.userCategory}`}
+            </span>
+          )}
           {row.validationCodes.map((code) => (
             <span key={code} className="tag tag--warn">
               {VALIDATION_LABELS[code] ?? code}
@@ -141,7 +147,7 @@ function ReviewItem({ row, onChooseFlow, disabled }: { row: ReviewRow; onChooseF
             disabled={disabled}
             onChange={(e) => onChooseFlow(row.sourceRow, e.target.value === "auto" ? null : (e.target.value as Flow))}
           >
-            <option value="auto">자동: {FLOW_LABELS[row.flow]}</option>
+            <option value="auto">{row.ruleName ? `규칙: ${FLOW_LABELS[row.chosenFlow]}` : `자동: ${FLOW_LABELS[row.flow]}`}</option>
             {FLOWS.filter((f) => f !== "needs_review").map((flow) => (
               <option key={flow} value={flow}>
                 {FLOW_LABELS[flow]}

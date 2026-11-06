@@ -1,5 +1,5 @@
 /**
- * 설정: 원본 타입 → 집계 방향, 결제수단 → 카드 종류 매핑, 암호화 백업·병합 복원.
+ * 설정: 원본 타입 → 집계 방향, 분류 규칙, 결제수단 종류, 암호화 백업·병합 복원.
  * 매핑은 사용자가 고른 값만 저장하며 라벨로 추측하지 않는다.
  */
 import { useState } from "react";
@@ -7,8 +7,9 @@ import { useState } from "react";
 import { api, type PaymentMethodMapping, type TypeMapping } from "../api/client";
 import { useApp } from "../app/AppContext";
 import { BackupPanel } from "../components/BackupPanel";
+import { RulesPanel } from "../components/RulesPanel";
 import { StatusView } from "../components/StatusView";
-import { type CardKind, type Flow, FLOW_LABELS, FLOWS } from "../domain/transaction";
+import { CARD_KINDS, type CardKind, type Flow, FLOW_LABELS, FLOWS } from "../domain/transaction";
 import { useAsync } from "../hooks/useAsync";
 import { APP_VERSION } from "../version";
 import { CARD_KIND_LABELS } from "./CardsPage";
@@ -44,9 +45,11 @@ export function SettingsPage() {
         </StatusView>
       </section>
 
+      <RulesPanel onChanged={notifyDataChanged} />
+
       <section className="card section" aria-labelledby="payments-title">
-        <h2 id="payments-title">결제수단 카드 종류</h2>
-        <p className="muted">카드 사용 화면의 신용·체크 구분에 쓰입니다. 기타는 카드 합계에서 제외됩니다.</p>
+        <h2 id="payments-title">결제수단 종류</h2>
+        <p className="muted">결제수단 화면의 묶음에 쓰입니다. 카드 합계는 신용·체크만 셉니다. 수익·지출 합계에는 영향이 없습니다.</p>
         <StatusView state={payments} isEmpty={(rows) => rows.length === 0} empty="아직 가져온 결제수단이 없습니다.">
           {(rows) => (
             <ul className="rows">
@@ -150,10 +153,10 @@ function PaymentRow({ row, onSaved }: { row: PaymentMethodMapping; onSaved: () =
       </span>
       <span className="mapping-row__control">
         <label>
-          <span className="visually-hidden">{row.source_label} 카드 종류</span>
+          <span className="visually-hidden">{row.source_label} 결제수단 종류</span>
           <select value={row.card_kind ?? ""} onChange={(e) => e.target.value && save(e.target.value as CardKind)} disabled={state === "saving"} className={row.card_kind ? undefined : "select--warn"}>
             {!row.card_kind && <option value="">{CARD_KIND_LABELS.unmapped}</option>}
-            {(["credit", "debit", "other"] as const).map((kind) => (
+            {CARD_KINDS.map((kind) => (
               <option key={kind} value={kind}>
                 {CARD_KIND_LABELS[kind]}
               </option>

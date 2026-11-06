@@ -4,10 +4,10 @@
  */
 
 /** 집계상 거래 성격. `needs_review`는 사용자가 정하기 전까지 합계에서 제외한다. */
-export type Flow = "income" | "expense" | "transfer" | "refund" | "needs_review";
+export type Flow = "income" | "expense" | "transfer" | "refund" | "reimbursement" | "needs_review";
 
 /** 사용자가 지정할 수 있는 흐름 목록(표시 순서). */
-export const FLOWS: readonly Flow[] = ["income", "expense", "transfer", "refund", "needs_review"];
+export const FLOWS: readonly Flow[] = ["income", "expense", "transfer", "refund", "reimbursement", "needs_review"];
 
 /** 흐름 한국어 라벨. */
 export const FLOW_LABELS: Record<Flow, string> = {
@@ -15,11 +15,15 @@ export const FLOW_LABELS: Record<Flow, string> = {
   expense: "지출",
   transfer: "이체",
   refund: "환불",
+  reimbursement: "경비 정산",
   needs_review: "미분류",
 };
 
-/** 결제수단 카드 종류. */
-export type CardKind = "credit" | "debit" | "other";
+/** 결제수단 종류. 카드 합계는 credit·debit만 센다. */
+export type CardKind = "credit" | "debit" | "account" | "prepaid" | "point" | "other";
+
+/** 결제수단 종류 목록(표시 순서). */
+export const CARD_KINDS: readonly CardKind[] = ["credit", "debit", "account", "prepaid", "point", "other"];
 
 /** 원본 타입 → 흐름 기본 매핑. 사용자 저장 매핑이 있으면 그것이 우선한다. */
 export const DEFAULT_TYPE_FLOWS: Readonly<Record<string, Flow>> = {

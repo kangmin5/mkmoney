@@ -125,13 +125,19 @@ function RestoreForm({ onRestored }: { onRestored: () => void }) {
       const valid = await verifyBackupFingerprints(payload.transactions);
       setState({ kind: "working", label: "저장된 거래와 비교하는 중…" });
       const fingerprints = [...new Set(payload.transactions.filter((_, i) => valid[i]).map((t) => t.fingerprint))];
-      const [existing, types, payments] = await Promise.all([checkAllFingerprints(fingerprints), api.typeMappings(), api.paymentMappings()]);
+      const [existing, types, payments, rules] = await Promise.all([
+        checkAllFingerprints(fingerprints),
+        api.typeMappings(),
+        api.paymentMappings(),
+        api.rules(),
+      ]);
       const plan = planRestore(
         payload,
         valid,
         existing,
         new Set(types.filter((t) => t.flow).map((t) => t.source_type)),
         new Set(payments.filter((p) => p.card_kind).map((p) => p.source_label)),
+        new Set(rules.map((r) => r.name)),
       );
       setState({ kind: "preview", fileName: file.name, plan, exportedAt: payload.exported_at });
     } catch (error) {
@@ -145,7 +151,7 @@ function RestoreForm({ onRestored }: { onRestored: () => void }) {
     const { fileName, plan, exportedAt } = state;
     setState({ kind: "committing", fileName, plan, exportedAt });
     try {
-      const result = await api.restoreBackup(`백업 복원: ${fileName}`.slice(0, 255), plan.rows, plan.typeMappings, plan.paymentMappings);
+      const result = await api.restoreBackup(`백업 복원: ${fileName}`.slice(0, 255), plan.rows, plan.typeMappings, plan.paymentMappings, plan.rules);
       onRestored();
       setState({ kind: "done", result });
     } catch (error) {
@@ -199,7 +205,7 @@ function RestoreForm({ onRestored }: { onRestored: () => void }) {
             <div className="count"><dt>이미 있음(건너뜀)</dt><dd>{state.plan.existing.toLocaleString("ko-KR")}</dd></div>
             <div className="count"><dt>백업 내 중복</dt><dd>{state.plan.duplicateInBackup.toLocaleString("ko-KR")}</dd></div>
             <div className={state.plan.damaged ? "count count--error" : "count"}><dt>손상(복원 안 함)</dt><dd>{state.plan.damaged.toLocaleString("ko-KR")}</dd></div>
-            <div className="count"><dt>추가될 설정</dt><dd>{(state.plan.typeMappings.length + state.plan.paymentMappings.length).toLocaleString("ko-KR")}</dd></div>
+            <div className="count"><dt>추가될 설정</dt><dd>{(state.plan.typeMappings.length + state.plan.paymentMappings.length + state.plan.rules.length).toLocaleString("ko-KR")}</dd></div>
           </dl>
           {state.plan.typeMappings.length > 0 && (
             <p className="muted">타입 매핑 {state.plan.typeMappings.length}개를 추가하면 해당 타입의 자동 분류 거래가 다시 계산될 수 있습니다.</p>
@@ -217,11 +223,11 @@ function RestoreForm({ onRestored }: { onRestored: () => void }) {
               type="button"
               className="btn btn--primary"
               onClick={approve}
-              disabled={state.kind === "committing" || (state.plan.rows.length === 0 && state.plan.typeMappings.length + state.plan.paymentMappings.length === 0)}
+              disabled={state.kind === "committing" || (state.plan.rows.length === 0 && state.plan.typeMappings.length + state.plan.paymentMappings.length + state.plan.rules.length === 0)}
             >
               {state.kind === "committing"
                 ? "복원하는 중…"
-                : state.plan.rows.length === 0 && state.plan.typeMappings.length + state.plan.paymentMappings.length === 0
+                : state.plan.rows.length === 0 && state.plan.typeMappings.length + state.plan.paymentMappings.length + state.plan.rules.length === 0
                   ? "복원할 새 항목 없음"
                   : `신규 ${state.plan.rows.length.toLocaleString("ko-KR")}건 복원 승인`}
             </button>
@@ -234,8 +240,8 @@ function RestoreForm({ onRestored }: { onRestored: () => void }) {
           <p>
             거래 <b>{state.result.inserted.toLocaleString("ko-KR")}건</b>을 복원했습니다.
             {state.result.duplicate > 0 && ` 저장 중 이미 있던 ${state.result.duplicate}건은 건너뛰었습니다.`}
-            {state.result.type_mappings_added + state.result.payment_mappings_added > 0 &&
-              ` 설정 ${state.result.type_mappings_added + state.result.payment_mappings_added}개를 추가했습니다.`}
+            {state.result.type_mappings_added + state.result.payment_mappings_added + state.result.rules_added > 0 &&
+              ` 설정 ${state.result.type_mappings_added + state.result.payment_mappings_added + state.result.rules_added}개를 추가했습니다.`}
           </p>
           <div className="actions">
             <button type="button" className="btn" onClick={reset}>

@@ -1,6 +1,6 @@
 [project]
 name = "mkmoney-backend"
-version = "0.2.1"
+version = "0.3.0"
 description = "Private personal cashflow application API"
 requires-python = ">=3.13"
 dependencies = [

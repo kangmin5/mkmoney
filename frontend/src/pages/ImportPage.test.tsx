@@ -31,6 +31,7 @@ async function loadFile(routes: Parameters<typeof mockFetch>[0] = {}) {
   const old = await existingFingerprint();
   const fetch = mockFetch({
     "GET /api/type-mappings": () => [],
+    "GET /api/rules": () => [],
     "POST /api/imports/check": () => ({ existing: [old] }),
     "PUT /api/type-mappings": () => [],
     "POST /api/imports": () => jsonResponse({ batch_id: "b1", inserted: 3, duplicate: 0 }, 201),
@@ -72,6 +73,7 @@ describe("ImportPage", () => {
     expect(body.rows[0].time).toBe("12:00:00");
     expect(body.summary).toEqual({ in_file_duplicate: 1, review: 1, error: 1 });
     expect(JSON.stringify(body)).not.toMatch(/합성 기존 가게|합성 오류|다른분류/);
+    expect(body.rows.every((r) => (r as { user_category?: unknown }).user_category === null)).toBe(true);
     expect(context.notifyDataChanged).toHaveBeenCalled();
   });
 
@@ -94,10 +96,26 @@ describe("ImportPage", () => {
   });
 
   it("shows a clear local error for unsupported files without calling the API", async () => {
-    const fetch = mockFetch({ "GET /api/type-mappings": () => [] });
+    const fetch = mockFetch({ "GET /api/type-mappings": () => [], "GET /api/rules": () => [] });
     renderWithApp(<ImportPage />);
     fireEvent.change(await screen.findByLabelText("뱅크샐러드 엑셀 파일(.xlsx)"), { target: { files: [new File(["a,b"], "export.csv")] } });
     expect(await screen.findByRole("alert")).toHaveTextContent("지원하지 않는 파일입니다");
     expect(callsTo(fetch, "POST", "/api/imports/check")).toHaveLength(0);
+  });
+});
+
+describe("ImportPage rules", () => {
+  it("suggests flow and user category from saved rules and sends them only after approval", async () => {
+    const rule = { id: "r1", position: 1, name: "합성 모름 규칙", enabled: true, description_contains: "모름", source_type: null, direction: "in", min_amount: null, max_amount: null, flow: "income", user_category: "합성분류" };
+    const { fetch } = await loadFile({ "GET /api/rules": () => [rule] });
+    // 규칙으로 흐름이 정해진 행은 '검토 필요'에서 '저장 예정'(신규)으로 옮겨진다.
+    fireEvent.click(screen.getByRole("tab", { name: /저장 예정/ }));
+    expect(screen.getByText(/규칙: 합성 모름 규칙 → 합성분류/)).toBeInTheDocument();
+    expect(screen.getByText(/분류 규칙으로 1건의 흐름·분류 이름을 제안했습니다/)).toBeInTheDocument();
+    expect(callsTo(fetch, "POST", "/api/imports")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /저장 승인/ }));
+    await screen.findByRole("heading", { name: "저장 완료" });
+    const rows = (callsTo(fetch, "POST", "/api/imports")[0].body as { rows: { description: string; flow: string; user_category: string | null }[] }).rows;
+    expect(rows.find((r) => r.description === "합성 모름")).toMatchObject({ flow: "income", user_category: "합성분류" });
   });
 });

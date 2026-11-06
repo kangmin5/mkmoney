@@ -16,6 +16,8 @@ export interface RestorePlan {
   damaged: number;
   typeMappings: BackupPayload["type_mappings"];
   paymentMappings: BackupPayload["payment_mappings"];
+  /** 서버에 같은 이름이 없는 규칙만 */
+  rules: BackupPayload["rules"];
 }
 
 /** 각 거래의 지문을 내용으로 다시 계산해 일치 여부를 돌려준다. */
@@ -43,6 +45,7 @@ export async function verifyBackupFingerprints(rows: readonly TransactionCreate[
  * @param existing 서버에 이미 있는 지문
  * @param savedTypes 서버에 사용자 매핑이 있는 원본 타입
  * @param savedPayments 서버에 매핑이 있는 결제수단 라벨
+ * @param savedRuleNames 서버에 이미 있는 규칙 이름
  */
 export function planRestore(
   payload: BackupPayload,
@@ -50,6 +53,7 @@ export function planRestore(
   existing: ReadonlySet<string>,
   savedTypes: ReadonlySet<string>,
   savedPayments: ReadonlySet<string>,
+  savedRuleNames: ReadonlySet<string> = new Set(),
 ): RestorePlan {
   const seen = new Set<string>();
   const rows: TransactionCreate[] = [];
@@ -73,5 +77,6 @@ export function planRestore(
     damaged,
     typeMappings: payload.type_mappings.filter((m) => !savedTypes.has(m.source_type)),
     paymentMappings: payload.payment_mappings.filter((m) => !savedPayments.has(m.source_label)),
+    rules: payload.rules.filter((r) => !savedRuleNames.has(r.name)),
   };
 }
