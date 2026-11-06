@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이번 달 자금 흐름 · 화면 시안</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { min-height:100%; }
+  body { margin:0; padding:28px 20px; background:#f3eee2; color:#09223f; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  button { font:inherit; }
+</style>
+</head>
+<body>
+<style>
+  .scene { max-width: 1400px; margin: 0 auto; color: #09223f; }
+  .scene h2 { font: 700 1.8rem/1.3 Georgia, serif; color:#09223f; }
+  .scene .intro { color:#5f666d; margin: .4rem 0 1.4rem; }
+  .screens { display:grid; grid-template-columns: minmax(0,1.2fr) minmax(330px,.8fr); gap:18px; align-items:start; }
+  .panel { background:#fffdf7; border:1px solid rgba(9,34,63,.14); border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(9,34,63,.08); }
+  .panel-label { padding:9px 14px; color:#5f666d; background:#e9e3d3; font:600 11px/1.4 system-ui,sans-serif; letter-spacing:.1em; text-transform:uppercase; }
+  .app { background:#f3eee2; padding:16px; min-height:550px; font:13px/1.45 system-ui,sans-serif; }
+  .top { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(9,34,63,.15); padding:3px 0 13px; }
+  .brand { font:700 17px/1.2 ui-monospace,monospace; letter-spacing:-.05em; }
+  .brand i { color:#2b6cb8; font-style:normal; }
+  .nav { display:flex; gap:16px; color:#5f666d; font-size:11px; }
+  .nav b { color:#09223f; border-bottom:2px solid #2b6cb8; padding-bottom:14px; margin-bottom:-15px; }
+  .user { border:1px solid rgba(9,34,63,.18); padding:5px 9px; border-radius:5px; font-size:10px; }
+  .hello { margin:20px 0 12px; display:flex; justify-content:space-between; align-items:end; }
+  .eyebrow { color:#5f666d; font-size:9px; letter-spacing:.15em; text-transform:uppercase; }
+  .hello h3 { margin:3px 0 0; font:700 23px/1.25 Georgia,serif; }
+  .filters { display:flex; gap:6px; align-items:center; color:#5f666d; font-size:10px; }
+  .pill { border:1px solid rgba(9,34,63,.18); background:#faf7ee; border-radius:5px; padding:6px 8px; color:#09223f; }
+  .pill.on { color:white; background:#09223f; }
+  .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }
+  .kpi { background:#faf7ee; border:1px solid rgba(9,34,63,.1); padding:12px; border-radius:7px; }
+  .kpi small { color:#5f666d; display:block; font-size:10px; }
+  .kpi strong { display:block; margin-top:7px; font:700 20px/1.2 Georgia,serif; }
+  .kpi em { display:block; margin-top:5px; color:#5d6c58; font-size:9px; font-style:normal; }
+  .chartbox { margin-top:10px; background:#faf7ee; border:1px solid rgba(9,34,63,.1); padding:12px; border-radius:7px; }
+  .secthead { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; }
+  .secthead strong { font:600 14px/1.2 Georgia,serif; }
+  .muted { color:#5f666d; font-size:9px; }
+  .chart { height:112px; display:flex; align-items:end; gap:12px; padding:5px 8px 0; border-bottom:1px solid rgba(9,34,63,.15); background:repeating-linear-gradient(to bottom,transparent 0 27px,rgba(9,34,63,.07) 28px); }
+  .month { height:100%; flex:1; display:flex; gap:3px; align-items:end; justify-content:center; position:relative; }
+  .bar { width:12px; background:#2b6cb8; border-radius:3px 3px 0 0; }
+  .bar.out { background:#a9b5a2; }
+  .month label { position:absolute; bottom:-16px; color:#5f666d; font-size:8px; }
+  .below { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:23px; }
+  .listbox { background:#faf7ee; border:1px solid rgba(9,34,63,.1); padding:11px; border-radius:7px; }
+  .row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(9,34,63,.09); font-size:10px; }
+  .row:last-child { border:0; }
+  .tag { background:#e9e3d3; padding:2px 6px; border-radius:99px; color:#3f4346; font-size:8px; }
+  .import-app { background:#f3eee2; padding:15px; min-height:550px; font:12px/1.45 system-ui,sans-serif; }
+  .back { color:#5f666d; font-size:10px; }
+  .import-app h3 { margin:12px 0 3px; font:700 22px/1.2 Georgia,serif; }
+  .import-app p { color:#5f666d; font-size:10px; margin:0; }
+  .file { display:flex; gap:10px; align-items:center; background:#faf7ee; border:1px solid rgba(9,34,63,.13); padding:11px; margin:13px 0 10px; border-radius:7px; }
+  .fileicon { width:31px; height:35px; display:grid; place-items:center; background:#e9e3d3; border-radius:4px; font-weight:700; color:#2b6cb8; }
+  .file strong { display:block; font-size:10px; }
+  .file small { color:#5f666d; font-size:8px; }
+  .sheet { display:flex; justify-content:space-between; padding:9px 10px; background:#e9e3d3; border-radius:6px; font-size:9px; margin-bottom:9px; }
+  .sheet b { color:#09223f; }
+  .counts { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:9px 0; }
+  .count { background:#faf7ee; border:1px solid rgba(9,34,63,.1); border-radius:6px; padding:8px; }
+  .count small { display:block; color:#5f666d; font-size:8px; }
+  .count b { display:block; margin-top:4px; font-size:15px; }
+  .notice { background:#fff8da; border:1px solid #ecc95f; border-radius:6px; padding:8px; color:#3f4346; font-size:9px; margin:9px 0; }
+  .table { width:100%; border-collapse:collapse; background:#faf7ee; font-size:8px; }
+  .table th { text-align:left; color:#5f666d; font-weight:500; padding:7px 5px; border-bottom:1px solid rgba(9,34,63,.15); }
+  .table td { padding:7px 5px; border-bottom:1px solid rgba(9,34,63,.08); }
+  .dup { color:#5f666d; }
+  .new { color:#245c9e; font-weight:700; }
+  .actions { display:flex; justify-content:space-between; align-items:center; gap:7px; margin-top:11px; }
+  .btn { padding:8px 10px; border-radius:5px; border:1px solid rgba(9,34,63,.2); font-size:9px; background:transparent; color:#09223f; }
+  .btn.primary { background:#09223f; color:#f3eee2; border-color:#09223f; }
+  .mobile-wrap { margin-top:20px; display:flex; justify-content:center; }
+  .phone { width:min(100%,330px); border:7px solid #09223f; border-radius:25px; overflow:hidden; background:#f3eee2; box-shadow:0 8px 24px rgba(9,34,63,.12); }
+  .phone-top { height:22px; background:#09223f; color:#f3eee2; text-align:center; font-size:8px; padding-top:3px; }
+  .phone-app { padding:13px; font:11px/1.4 system-ui,sans-serif; }
+  .phone-nav { display:flex; justify-content:space-between; border-bottom:1px solid rgba(9,34,63,.15); padding-bottom:10px; }
+  .phone-app h4 { font:700 20px/1.2 Georgia,serif; margin:15px 0 3px; }
+  .mobile-kpis { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+  .mobile-kpis .kpi { padding:10px; }
+  .mobile-kpis .kpi strong { font-size:16px; }
+  .phone-chart { height:92px; margin-top:8px; background:#faf7ee; border:1px solid rgba(9,34,63,.1); border-radius:7px; padding:9px; }
+  .phone-bars { height:57px; display:flex; align-items:end; justify-content:space-around; gap:6px; }
+  .phone-bars i { width:15px; border-radius:3px 3px 0 0; background:#2b6cb8; }
+  .phone-bars i:nth-child(even) { background:#a9b5a2; }
+  .bottomnav { position:relative; display:flex; justify-content:space-around; background:#faf7ee; padding:10px 3px; margin:12px -13px -13px; color:#5f666d; font-size:8px; }
+  .bottomnav b { color:#245c9e; }
+  .footnote { margin-top:15px; color:#5f666d; font-size:11px; }
+  @media(max-width:900px) { #frame-content { padding:1rem !important; } .screens { grid-template-columns:1fr; } .app,.import-app { min-height:0; } }
+</style>
+
+<div class="scene">
+  <h2>이번 달 자금 흐름 · 화면 시안</h2>
+  <p class="intro">대시보드와 엑셀 가져오기 검토 화면입니다. 화면 안의 금액과 거래는 모두 가상 예시입니다.</p>
+
+  <div class="screens">
+    <section class="panel">
+      <div class="panel-label">01 · 자금 현황 대시보드 · 데스크톱</div>
+      <div class="app">
+        <div class="top"><div class="brand">m<i>:</i>money</div><div class="nav"><b>현황</b><span>거래내역</span><span>가져오기</span></div><div class="user">내 가계부</div></div>
+        <div class="hello"><div><div class="eyebrow">Personal finance · 2026년 11월</div><h3>이번 달 자금 흐름</h3></div><div class="filters"><span class="pill on">월별</span><span class="pill">기간별</span><span class="pill">2026.11 ▾</span></div></div>
+        <div class="kpis">
+          <div class="kpi"><small>수익</small><strong>₩5,240,000</strong><em>전월 같은 기간보다 4.2% ↑</em></div>
+          <div class="kpi"><small>지출</small><strong>₩3,186,500</strong><em>전월 같은 기간보다 2.1% ↓</em></div>
+          <div class="kpi"><small>차액</small><strong>₩2,053,500</strong><em>수익 − 지출</em></div>
+        </div>
+        <div class="chartbox"><div class="secthead"><strong>월별 수익과 지출</strong><span class="muted">최근 6개월 · 합성 데이터</span></div><div class="chart">
+          <div class="month"><i class="bar" style="height:60%"></i><i class="bar out" style="height:43%"></i><label>6월</label></div><div class="month"><i class="bar" style="height:72%"></i><i class="bar out" style="height:55%"></i><label>7월</label></div><div class="month"><i class="bar" style="height:66%"></i><i class="bar out" style="height:48%"></i><label>8월</label></div><div class="month"><i class="bar" style="height:78%"></i><i class="bar out" style="height:59%"></i><label>9월</label></div><div class="month"><i class="bar" style="height:70%"></i><i class="bar out" style="height:52%"></i><label>10월</label></div><div class="month"><i class="bar" style="height:85%"></i><i class="bar out" style="height:63%"></i><label>11월</label></div>
+        </div></div>
+        <div class="below">
+          <div class="listbox"><div class="secthead"><strong>분류별 지출</strong><span class="muted">11월</span></div><div class="row"><span>식비</span><b>₩482,000</b></div><div class="row"><span>카드 사용료</span><b>₩716,500</b></div><div class="row"><span>보험</span><b>₩230,000</b></div><div class="row"><span>저축</span><b>₩500,000</b></div></div>
+          <div class="listbox"><div class="secthead"><strong>최근 가져오기</strong><span class="tag">완료</span></div><div class="row"><span>expense-2026-11-06.xlsx</span><span class="muted">오늘</span></div><div class="row"><span>신규 거래</span><b>12건</b></div><div class="row"><span>중복 제외</span><b>34건</b></div><div class="row"><span>최근 거래 보기</span><span>→</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-label">02 · 엑셀 가져오기 검토 · 데스크톱</div>
+      <div class="import-app">
+        <div class="back">← 현황으로</div><h3>거래 가져오기</h3><p>파일은 브라우저에서 읽고, 승인한 새 거래만 저장합니다.</p>
+        <div class="file"><div class="fileicon">X</div><div><strong>expense-2026-11-06.xlsx</strong><small>시트와 열 구조 확인 완료</small></div></div>
+        <div class="sheet"><span>가져올 시트</span><b>가계부 내역 ✓</b></div>
+        <div class="counts"><div class="count"><small>전체 행</small><b>46</b></div><div class="count"><small>신규 추가</small><b>12</b></div><div class="count"><small>중복 제외</small><b>34</b></div></div>
+        <div class="notice">중복 판정: 날짜·시간·타입·금액·화폐·결제수단·내용이 모두 같은 거래를 제외합니다. 기존 거래는 수정하지 않습니다.</div>
+        <div class="secthead"><strong>거래 미리보기</strong><span class="muted">신규 12건만 저장 예정</span></div>
+        <table class="table"><thead><tr><th>날짜</th><th>타입·분류</th><th>내용</th><th>금액</th><th>결과</th></tr></thead><tbody>
+          <tr><td>11.06</td><td>지출 · 식비</td><td>가상 거래 A</td><td>₩12,000</td><td class="dup">중복 제외</td></tr>
+          <tr><td>11.06</td><td>수익 · 임대수익</td><td>가상 거래 B</td><td>₩800,000</td><td class="new">신규</td></tr>
+          <tr><td>11.05</td><td>지출 · 보험</td><td>가상 거래 C</td><td>₩90,000</td><td class="new">신규</td></tr>
+          <tr><td>11.04</td><td>지출 · 저축</td><td>가상 거래 D</td><td>₩300,000</td><td class="dup">중복 제외</td></tr>
+        </tbody></table>
+        <div class="actions"><button class="btn">취소</button><button class="btn primary">신규 12건 저장 승인</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="mobile-wrap"><section class="panel" style="width:380px;max-width:100%">
+    <div class="panel-label">03 · 모바일 조회</div>
+    <div class="phone"><div class="phone-top">9:41</div><div class="phone-app">
+      <div class="phone-nav"><b style="font:700 16px ui-monospace,monospace">m<i style="color:#2b6cb8;font-style:normal">:</i>money</b><span>☰</span></div>
+      <div class="eyebrow" style="margin-top:14px">2026년 11월 · 월별</div><h4>이번 달 자금 흐름</h4><div class="muted">전월 같은 기간과 비교</div>
+      <div class="mobile-kpis"><div class="kpi"><small>수익</small><strong>₩5,240,000</strong><em>4.2% ↑</em></div><div class="kpi"><small>지출</small><strong>₩3,186,500</strong><em>2.1% ↓</em></div><div class="kpi" style="grid-column:1/3"><small>차액</small><strong>₩2,053,500</strong></div></div>
+      <div class="phone-chart"><div class="secthead"><strong style="font:600 12px Georgia,serif">수익과 지출</strong><span class="muted">최근 6개월</span></div><div class="phone-bars"><i style="height:47%"></i><i style="height:35%"></i><i style="height:62%"></i><i style="height:44%"></i><i style="height:55%"></i><i style="height:41%"></i><i style="height:72%"></i><i style="height:54%"></i><i style="height:65%"></i><i style="height:49%"></i><i style="height:80%"></i><i style="height:60%"></i></div></div>
+      <div class="listbox" style="margin-top:8px"><div class="secthead"><strong>분류별 지출</strong><span class="muted">전체 보기 →</span></div><div class="row"><span>식비</span><b>₩482,000</b></div><div class="row"><span>카드 사용료</span><b>₩716,500</b></div></div>
+      <div class="bottomnav"><b>현황</b><span>거래</span><span>가져오기</span><span>설정</span></div>
+    </div></div>
+  </section></div>
+  <p class="footnote">검토해 주실 점: 대시보드의 정보 우선순위, 거래 미리보기의 열 구성, 모바일에서 먼저 보일 항목이 기대와 맞는지 알려주세요.</p>
+</div>
+
+</body>
+</html>
