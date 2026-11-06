@@ -23,3 +23,11 @@ describe('privacy boundary', () => {
     expect(storageUsers).toEqual([]);
   });
 });
+
+describe('react effect safety', () => {
+  it('never uses expression-bodied useEffect (a returned value would be called as cleanup)', () => {
+    // 예: useEffect(() => window.scrollTo(0, 0)) — 최신 브라우저의 scrollTo는 Promise를 반환해 화면이 멈춘다.
+    const offenders = Object.entries(sources).filter(([, text]) => /useEffect\(\s*\(\)\s*=>\s*[^{\s]/.test(text)).map(([file]) => file);
+    expect(offenders).toEqual([]);
+  });
+});

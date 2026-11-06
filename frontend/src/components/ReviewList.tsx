@@ -50,7 +50,9 @@ interface ReviewListProps {
 export function ReviewList({ rows, counts, onChooseFlow, disabled }: ReviewListProps) {
   const [tab, setTab] = useState<ReviewTab>(() => (counts.needs_review > 0 ? "needs_review" : "to_save"));
   const [page, setPage] = useState(0);
-  useEffect(() => setPage(0), [tab]);
+  useEffect(() => {
+    setPage(0);
+  }, [tab]);
 
   const visible = useMemo(() => rows.filter((row) => inTab(row, tab)), [rows, tab]);
   const pages = Math.max(1, Math.ceil(visible.length / REVIEW_PAGE_SIZE));

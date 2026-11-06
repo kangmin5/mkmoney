@@ -20,7 +20,9 @@ export function TransactionsPage() {
   const { period, setPeriod, dataVersion, notifyDataChanged, transactionFilters, setTransactionFilters } = useApp();
   const [page, setPage] = useState(0);
   // 필터나 기간이 바뀌면 첫 페이지로.
-  useEffect(() => setPage(0), [period.start, period.end, transactionFilters]);
+  useEffect(() => {
+    setPage(0);
+  }, [period.start, period.end, transactionFilters]);
 
   const filters = { ...transactionFilters, start: period.start, end: period.end };
   const result = useAsync(

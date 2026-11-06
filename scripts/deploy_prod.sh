@@ -13,6 +13,11 @@ if ! [[ ${LAN_BIND_IP} =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; th
   echo "LAN_BIND_IP(${LAN_BIND_IP:-없음})는 사설 IP여야 합니다."; exit 1
 fi
 ip -4 -o addr show | grep -q " ${LAN_BIND_IP}/" || { echo "이 서버에 ${LAN_BIND_IP} 주소가 없습니다."; exit 1; }
+# .env.example의 예시값이 남아 있으면 배포하지 않는다.
+if grep -qE "change-me|c3ludGhldGljc2FsdA" .env; then
+  echo ".env에 예시값이 남아 있습니다(change-me 또는 예시 비밀번호 해시). make secret / make password-hash로 교체하세요."; exit 1
+fi
+[[ $(env_value MKMONEY_PASSWORD_HASH) == '$argon2id$'* ]] || { echo "MKMONEY_PASSWORD_HASH 형식이 올바르지 않습니다(작은따옴표로 감싼 \$argon2id\$... 값)."; exit 1; }
 "${COMPOSE[@]}" config --quiet
 
 if [[ -n "$("${COMPOSE[@]}" ps -q --status running db 2>/dev/null)" ]]; then

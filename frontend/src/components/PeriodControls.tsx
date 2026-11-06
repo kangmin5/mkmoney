@@ -26,7 +26,9 @@ export function PeriodControls({ period, onChange, showComparison = true }: Peri
   const today = todayInSeoul();
   const month = period.start.slice(0, 7);
   const [draft, setDraft] = useState({ start: period.start, end: period.end });
-  useEffect(() => setDraft({ start: period.start, end: period.end }), [period.start, period.end]);
+  useEffect(() => {
+    setDraft({ start: period.start, end: period.end });
+  }, [period.start, period.end]);
   const draftValid = isValidRange(draft.start, draft.end);
 
   const setKind = (kind: Period["kind"]) => {

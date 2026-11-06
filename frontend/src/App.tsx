@@ -35,7 +35,12 @@ export default function App() {
   }, [attempt]);
 
   // 어떤 API든 401이면 로그인 화면으로.
-  useEffect(() => onUnauthorized(() => setAuth("anonymous")), []);
+  useEffect(() => {
+    const unsubscribe = onUnauthorized(() => setAuth("anonymous"));
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   if (auth === "checking") {
     return (
@@ -73,7 +78,10 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   // 화면 전환 시 맨 위로(모바일에서 이전 스크롤 위치가 남지 않게).
-  useEffect(() => window.scrollTo?.(0, 0), [route]);
+  // 주의: 최신 브라우저의 scrollTo는 Promise를 반환하므로 effect 본문을 블록으로 두어 반환값이 정리 함수가 되지 않게 한다.
+  useEffect(() => {
+    window.scrollTo?.(0, 0);
+  }, [route]);
 
   const navigate = useCallback((next: Route, filters?: ExtraFilters) => {
     if (filters) setTransactionFilters(filters);

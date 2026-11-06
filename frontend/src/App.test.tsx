@@ -59,3 +59,20 @@ describe("App auth gate", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "로그인" })).toBeInTheDocument());
   });
 });
+
+describe("App navigation", () => {
+  it("keeps rendering when scrollTo returns a promise (modern browsers)", async () => {
+    const original = window.scrollTo;
+    window.scrollTo = (() => Promise.resolve()) as unknown as typeof window.scrollTo;
+    mockFetch({ "GET /api/auth/me": () => ({ authenticated: true }), ...dataRoutes, "GET /api/transactions": () => ({ items: [], total: 0, limit: 50, offset: 0 }) });
+    render(<App />);
+    await screen.findByRole("heading", { name: /자금 흐름/ });
+    window.location.hash = "#transactions";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(await screen.findByRole("heading", { name: "거래내역" })).toBeInTheDocument();
+    window.location.hash = "#dashboard";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(await screen.findByRole("heading", { name: /자금 흐름/ })).toBeInTheDocument();
+    window.scrollTo = original;
+  });
+});

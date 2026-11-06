@@ -2,6 +2,13 @@
 
 커밋마다 버전과 변경 요약을 기록한다.
 
+## v0.2.1 — 메뉴 이동 시 빈 화면 수정, 배포 예시값 차단
+
+- 수정: 최신 Chrome의 `window.scrollTo()`가 Promise를 반환해, 식 본문 `useEffect`의 반환값이 정리 함수로 호출되며
+  메뉴 이동 시 React가 멈추고 화면이 비던 문제. 모든 `useEffect`를 블록 본문으로 바꾸고 회귀 테스트·정적 검사 추가.
+- 운영과 같은 이미지·Caddy 설정의 localhost 재현 스택에서 6개 메뉴 이동 정상 확인.
+- 배포: `.env`에 예시값(change-me·예시 해시)이 있거나 해시 형식이 틀리면 `deploy_prod.sh`가 중단.
+
 ## v0.2.0 — MVP 배포 패키징과 운영 문서
 
 - Task 9: 운영 `compose.yaml`(mkmoney-prod: db·app·proxy), 앱 Dockerfile(프론트 빌드 포함, 비루트 실행, 시작 시 마이그레이션),

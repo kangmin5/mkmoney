@@ -23,7 +23,9 @@ const unauthorizedListeners = new Set<UnauthorizedListener>();
 /** 401 응답 시 호출될 콜백 등록(앱 셸이 로그인 화면으로 전환). 해제 함수를 돌려준다. */
 export function onUnauthorized(listener: UnauthorizedListener): () => void {
   unauthorizedListeners.add(listener);
-  return () => unauthorizedListeners.delete(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
 }
 
 /** 서버 오류 본문에서 사람이 읽을 메시지를 꺼낸다(값 없는 detail 문자열만). */
