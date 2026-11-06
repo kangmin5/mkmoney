@@ -1,5 +1,7 @@
 """FastAPI 진입점: JSON API와(빌드된 경우) 같은 출처의 정적 프론트엔드를 제공한다."""
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,8 +13,11 @@ from app.config import settings
 from app.security import enforce_transport
 
 
-def create_app() -> FastAPI:
-    """앱을 조립한다. 문서 UI는 끈다(단일 사용자 사설 앱)."""
+def create_app(frontend_dist: Path | None = None) -> FastAPI:
+    """
+    앱을 조립한다. 문서 UI는 끈다(단일 사용자 사설 앱).
+    frontend_dist:  빌드된 프론트 경로(기본: 설정값). 있으면 같은 출처에서 정적 파일을 제공한다.
+    """
     application = FastAPI(
         title="mkmoney", version=__version__, docs_url=None, redoc_url=None, openapi_url=None
     )
@@ -39,10 +44,9 @@ def create_app() -> FastAPI:
     ):
         application.include_router(router, dependencies=guarded)
 
-    if settings.frontend_dist.is_dir():
-        application.mount(
-            "/", StaticFiles(directory=settings.frontend_dist, html=True), name="frontend"
-        )
+    dist = frontend_dist or settings.frontend_dist
+    if dist.is_dir():
+        application.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
     return application
 
 

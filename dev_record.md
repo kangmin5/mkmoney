@@ -2,6 +2,18 @@
 
 커밋마다 버전과 변경 요약을 기록한다.
 
+## v0.2.0 — MVP 배포 패키징과 운영 문서
+
+- Task 9: 운영 `compose.yaml`(mkmoney-prod: db·app·proxy), 앱 Dockerfile(프론트 빌드 포함, 비루트 실행, 시작 시 마이그레이션),
+  허용 목록 `.dockerignore`(data/·.env·DB·백업 제외), 전용 Caddy(`tls internal`, 보안 헤더·CSP, 관리 API·접근 로그 끔).
+- 앱·DB 포트 비공개, DB는 internal 네트워크, 프록시는 `LAN_BIND_IP:443`만(누락 시 설정 거부).
+- `scripts/deploy_prod.sh`(사설 IP 검증 → 백업 → 재빌드 → HTTPS 헬스·버전 확인), `scripts/backup_prod_db.sh`(14개 롤링, 600 권한).
+- Makefile: `prod-config`, `password-hash`, `secret`, `ca-cert`. `.env.example`(해시는 작은따옴표 필수).
+- README: 데이터 저장 위치, DNS(Cloudflare DNS 전용)·DHCP 고정, 기기별 인증서 신뢰 등록, 백업·복원, 공개 노출 금지.
+- 검증: 이미지 내용 점검, compose 렌더링 테스트, 정적 앱 테스트, 프론트 외부 URL·저장소 사용 금지 테스트,
+  localhost 전용 일회성 스모크 스택으로 로컬 CA·보안 헤더·Origin 검사·Secure 쿠키·로그 비밀값 부재 확인 후 삭제.
+- 기능 단위(MVP) 완료로 minor 버전 상승.
+
 ## v0.1.3 — 암호화 백업과 병합 복원
 
 - Task 8: 브라우저 암호화 백업(AES-GCM-256, PBKDF2-SHA-256 600,000회, 새 salt·nonce, 머리를 추가 인증 데이터로 결합).

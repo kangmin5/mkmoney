@@ -1,0 +1,58 @@
+# 운영 스택(집 안 서버, 사설 LAN 전용). 실행: make deploy  (사용자 승인 후)
+# - DB·앱은 호스트 포트를 열지 않는다. DB는 외부와 단절된 내부 네트워크에만 둔다.
+# - 프록시(Caddy)만 LAN_BIND_IP:443에 바인드한다. 와일드카드(0.0.0.0) 기본값 없음.
+name: mkmoney-prod
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mkmoney
+      POSTGRES_USER: mkmoney
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD가 필요합니다}
+    volumes:
+      - ./pgdata-prod:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mkmoney -d mkmoney"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mkmoney-app:local
+    restart: unless-stopped
+    environment:
+      MKMONEY_DATABASE_URL: postgresql+psycopg://mkmoney:${POSTGRES_PASSWORD}@db:5432/mkmoney
+      MKMONEY_PASSWORD_HASH: ${MKMONEY_PASSWORD_HASH:?MKMONEY_PASSWORD_HASH가 필요합니다}
+      MKMONEY_SESSION_SECRET: ${MKMONEY_SESSION_SECRET:?MKMONEY_SESSION_SECRET이 필요합니다}
+      MKMONEY_ALLOWED_ORIGINS: https://${MKMONEY_DOMAIN:?MKMONEY_DOMAIN이 필요합니다}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, edge]
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${LAN_BIND_IP:?LAN_BIND_IP(사설 LAN IP)가 필요합니다}:443:443/tcp"
+    environment:
+      MKMONEY_DOMAIN: ${MKMONEY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data-prod:/data
+      - ./caddy-config-prod:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [edge]
+
+networks:
+  backend:
+    internal: true
+  edge: {}

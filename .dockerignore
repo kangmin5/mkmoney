@@ -1,0 +1,16 @@
+# 허용 목록 방식: 아래에 명시한 파일만 이미지 빌드 컨텍스트에 들어간다.
+# data/(실제 금융 파일), .env, DB 데이터, 백업은 절대 포함되지 않는다.
+**
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/app/**
+!backend/alembic/**
+!backend/alembic.ini
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/tsconfig*.json
+!frontend/vite.config.ts
+!frontend/src/**
+**/__pycache__
+**/node_modules

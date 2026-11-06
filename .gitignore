@@ -13,3 +13,6 @@
 .devrec.tmp
 **/.ruff_cache/
 **/.mypy_cache/
+/caddy-data-prod/
+/caddy-config-prod/
+*.crt

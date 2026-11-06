@@ -12,7 +12,7 @@ DEV_DB_URL := postgresql+psycopg://mkmoney_dev:mkmoney_dev_only@127.0.0.1:55433/
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-db dev-migrate back front test-db-up test-db-down test check version bump record \
-        release deploy backup ship prod-up prod-down prod-logs prod-ps
+        release deploy backup ship prod-config password-hash secret ca-cert prod-up prod-down prod-logs prod-ps
 
 help: ## 사용 가능한 명령 목록
 	@echo "mkmoney 명령어:"
@@ -96,6 +96,20 @@ ship: ## release + 운영 배포 (예: make ship V=0.1.1 MSG="요약")
 	$(MAKE) release V=$(V) MSG="$(MSG)"
 	./scripts/deploy_prod.sh
 	@echo "ship 완료: v$(V)"
+
+prod-config: ## 운영 compose 설정 검증(기동하지 않음)
+	@test -f .env || { echo '.env 없음 — cp .env.example .env 후 값을 채우세요(README 참고)'; exit 1; }
+	$(COMPOSE_PROD) config --quiet && echo "compose.yaml 설정 OK"
+
+password-hash: ## 로그인 비밀번호 Argon2id 해시 생성(.env에 붙여 넣을 한 줄 출력)
+	@cd backend && $(UV) run python -m scripts.create_password_hash
+
+secret: ## 무작위 비밀값 생성(DB 비밀번호·세션 비밀용, 영문·숫자)
+	@python3 -c "import secrets; print(secrets.token_hex(32))"
+
+ca-cert: ## Caddy 로컬 CA 루트 인증서를 ./mkmoney-local-ca.crt로 내보내기(기기 신뢰 등록용)
+	$(COMPOSE_PROD) exec -T proxy cat /data/caddy/pki/authorities/local/root.crt > mkmoney-local-ca.crt
+	@openssl x509 -in mkmoney-local-ca.crt -noout -subject -enddate -fingerprint -sha256
 
 prod-up: ## 운영 스택 기동(재빌드)
 	$(COMPOSE_PROD) up -d --build

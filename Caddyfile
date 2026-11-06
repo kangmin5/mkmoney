@@ -1,0 +1,24 @@
+# mkmoney 전용 HTTPS 프록시(사설 LAN). 인증서는 Caddy 로컬 CA(tls internal) — 기기에 루트 인증서를 신뢰 등록한다.
+# 접근 로그는 남기지 않는다(기본값). 관리 API는 끈다.
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$MKMONEY_DOMAIN} {
+	tls internal
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+	reverse_proxy app:8000
+}
