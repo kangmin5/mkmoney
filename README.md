@@ -20,10 +20,10 @@
 ## 구성
 
 ```
-브라우저(PC·휴대폰) ──HTTPS──▶ Caddy(192.168.0.2:443, 로컬 CA) ──▶ FastAPI(app:8000) ──▶ PostgreSQL(db, 내부 네트워크)
+브라우저(PC·휴대폰) ──HTTPS──▶ Caddy(192.168.0.2:443 · Tailscale 100.104.129.79:8443, 로컬 CA) ──▶ FastAPI(app:8000) ──▶ PostgreSQL(db, 내부 네트워크)
 ```
 
-- `compose.yaml`(운영, 프로젝트 이름 `mkmoney-prod`): DB·앱은 호스트 포트를 열지 않고, 프록시만 `LAN_BIND_IP:443`에 바인드합니다.
+- `compose.yaml`(운영, 프로젝트 이름 `mkmoney-prod`): DB·앱은 호스트 포트를 열지 않고, 프록시만 `LAN_BIND_IP:443`(집 LAN)과 `TAILNET_BIND_IP:8443`(Tailscale — 443은 기존 `tailscale serve`가 사용 중)에 바인드합니다.
 - `compose.dev.yaml`(개발 DB, 127.0.0.1:55433), `compose.test.yaml`(테스트 전용 일회용 DB, 127.0.0.1:55432)과 데이터·이름이 분리되어 있습니다.
 - 공유기 포트포워딩·공개 터널은 **사용하지 않습니다**. 집 밖에서는 접속되지 않는 것이 정상입니다.
 
@@ -60,10 +60,15 @@ Cloudflare 대시보드 → `kangmin.kr` → DNS → 레코드 추가:
 
 | 유형 | 이름 | 값 | 프록시 상태 |
 |---|---|---|---|
-| A | `money` | `192.168.0.2` | **DNS 전용(회색 구름)** |
+| A | `money` | `100.104.129.79` (서버의 Tailscale IP, `tailscale ip -4`) | **DNS 전용(회색 구름)** |
+
+- **접속 주소는 `https://money.kangmin.kr:8443`** 입니다(포트 443은 이 서버의 `tailscale serve`가 이미 쓰고 있어 8443을 씁니다).
+- **외부 접속은 Tailscale로 합니다.** 접속할 기기(휴대폰·노트북)에 Tailscale 앱을 설치하고 같은 tailnet에 로그인하면 집 밖·다른 공유기·LTE에서도 열립니다. 인터넷에는 공개되지 않습니다.
+- 집 안에서도 이 레코드를 쓰므로 **모든 기기에서 Tailscale을 켜 둬야** 합니다(같은 LAN이면 직접 연결되어 속도 차이는 거의 없습니다). 이전 값 `192.168.0.2`로 되돌리면 LAN 전용(`https://money.kangmin.kr`, 포트 없음)으로 돌아갑니다.
+- tailnet의 다른 기기(서버 포함)도 이 주소에 닿을 수 있습니다. 좁히려면 Tailscale 관리 콘솔 ACL에서 `mk-home-server:8443` 접근을 개인 기기로 제한하세요.
 
 - 반드시 **DNS 전용**이어야 합니다. 주황 구름(프록시)이면 Cloudflare가 트래픽을 중계하려다 실패합니다.
-- 사설 IP를 가리키므로 집 밖에서는 연결되지 않습니다(공개 노출 없음). 사설 IP 주소가 공개 DNS에 보이는 점은 감수합니다.
+- Tailscale IP(사설 CGNAT 대역)를 가리키므로 tailnet 밖에서는 연결되지 않습니다(공개 노출 없음). 이 주소가 공개 DNS에 보이는 점은 감수합니다.
 - 일부 공유기는 "DNS 리바인딩 보호"로 사설 IP 응답을 막습니다. 집에서 `money.kangmin.kr`이 열리지 않으면 공유기에서 이 도메인을 예외로 두거나, 공유기의 내부 DNS(호스트 이름) 기능으로 같은 레코드를 추가하세요.
 
 ### 3. 환경 파일
@@ -86,7 +91,20 @@ make password-hash   # 로그인 비밀번호 입력(12자 이상) → 출력된
 make deploy   # 설정 검증 → (기존 DB가 있으면) 백업 → 재빌드·기동 → HTTPS 헬스·버전 확인
 ```
 
-`scripts/deploy_prod.sh`는 `LAN_BIND_IP`가 사설 IP이고 이 서버의 주소인지 확인한 뒤에만 기동합니다.
+`scripts/deploy_prod.sh`는 `LAN_BIND_IP`가 사설 IP, `TAILNET_BIND_IP`가 Tailscale 대역 IP이고 둘 다 이 서버의 주소인지 확인한 뒤에만 기동하며, 두 주소 모두로 HTTPS 헬스를 확인합니다.
+
+### 4-1. 부팅 순서(docker → tailscaled 뒤) — 최초 1회
+
+프록시가 Tailscale IP(`TAILNET_BIND_IP:8443`)에 바인드하므로, 재부팅 때 docker가 Tailscale IP보다 먼저 뜨면 프록시가 실패하고 LAN 접속까지 끊깁니다. 드롭인을 설치해 docker가 tailscaled 뒤에 뜨고 IP가 붙을 때까지 최대 30초 기다리게 합니다.
+
+```bash
+sudo install -Dm644 scripts/systemd/docker-wait-tailscale.conf /etc/systemd/system/docker.service.d/wait-tailscale.conf
+sudo systemctl daemon-reload
+systemctl show docker -p After -p ExecStartPre | grep -E "tailscaled|tailscale0"   # 적용 확인
+```
+
+- 30초 안에 IP가 붙지 않아도 docker는 기동합니다(다른 컨테이너 보호). 그 경우 Tailscale 복구 후 `make prod-up`으로 프록시를 다시 띄웁니다.
+- 되돌리기: `/etc/systemd/system/docker.service.d/wait-tailscale.conf` 파일을 지우고 `sudo systemctl daemon-reload`.
 
 ### 5. 기기에 인증서 신뢰 등록
 

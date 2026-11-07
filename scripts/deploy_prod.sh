@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 운영 배포: 설정 검증 → (DB 실행 중이면) 백업 → 재빌드·기동 → 헬스·버전 확인.
-# 사설 LAN IP에만 바인드하며 공유기 포트포워딩·터널은 사용하지 않는다.
+# 사설 LAN IP와 Tailscale IP에만 바인드하며 공유기 포트포워딩·공개 터널은 사용하지 않는다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 COMPOSE=(docker compose -f compose.yaml --env-file .env)
@@ -13,6 +13,12 @@ if ! [[ ${LAN_BIND_IP} =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; th
   echo "LAN_BIND_IP(${LAN_BIND_IP:-없음})는 사설 IP여야 합니다."; exit 1
 fi
 ip -4 -o addr show | grep -q " ${LAN_BIND_IP}/" || { echo "이 서버에 ${LAN_BIND_IP} 주소가 없습니다."; exit 1; }
+# Tailscale IP는 CGNAT 대역(100.64.0.0/10)이어야 하고 tailscaled가 올라와 있어야 한다.
+TAILNET_BIND_IP=$(env_value TAILNET_BIND_IP)
+if ! [[ ${TAILNET_BIND_IP} =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+$ ]]; then
+  echo "TAILNET_BIND_IP(${TAILNET_BIND_IP:-없음})는 Tailscale IP(100.64.0.0/10)여야 합니다."; exit 1
+fi
+ip -4 -o addr show | grep -q " ${TAILNET_BIND_IP}/" || { echo "이 서버에 ${TAILNET_BIND_IP} 주소가 없습니다(tailscale up 확인)."; exit 1; }
 # .env.example의 예시값이 남아 있으면 배포하지 않는다.
 if grep -qE "change-me|c3ludGhldGljc2FsdA" .env; then
   echo ".env에 예시값이 남아 있습니다(change-me 또는 예시 비밀번호 해시). make secret / make password-hash로 교체하세요."; exit 1
@@ -43,7 +49,9 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 health=$(curl -sf --cacert "${ca}" --resolve "${DOMAIN}:443:${LAN_BIND_IP}" "https://${DOMAIN}/api/health")
+curl -sf -o /dev/null --cacert "${ca}" --resolve "${DOMAIN}:8443:${TAILNET_BIND_IP}" "https://${DOMAIN}:8443/api/health" \
+  || { echo "Tailscale 주소(${TAILNET_BIND_IP})로 접속되지 않습니다."; exit 1; }
 expected=$(grep -oP '__version__ = "\K[0-9.]+' backend/app/__init__.py)
 echo "헬스: ${health}"
 [[ ${health} == *"\"version\":\"${expected}\""* ]] || { echo "배포 버전이 ${expected}와 다릅니다."; exit 1; }
-echo "배포 완료: https://${DOMAIN} (v${expected})"
+echo "배포 완료: https://${DOMAIN} (LAN) · https://${DOMAIN}:8443 (Tailscale) (v${expected})"

@@ -26,12 +26,14 @@ def config() -> dict[str, Any]:
     return json.loads(result.stdout)  # type: ignore[no-any-return]
 
 
-def test_only_the_proxy_is_published_and_only_on_the_private_lan_ip(config: dict[str, Any]) -> None:
+def test_only_the_proxy_is_published_and_only_on_lan_and_tailnet_ips(config: dict[str, Any]) -> None:
+    """프록시만 LAN IP와 Tailscale IP의 443에 바인드되고 와일드카드 바인드는 없어야 한다."""
     services = config["services"]
     assert services["db"].get("ports") is None
     assert services["app"].get("ports") is None
     assert services["proxy"]["ports"] == [
-        {"mode": "ingress", "host_ip": "192.168.0.2", "target": 443, "published": "443", "protocol": "tcp"}
+        {"mode": "ingress", "host_ip": "192.168.0.2", "target": 443, "published": "443", "protocol": "tcp"},
+        {"mode": "ingress", "host_ip": "100.104.129.79", "target": 443, "published": "8443", "protocol": "tcp"},
     ]
 
 
@@ -42,16 +44,20 @@ def test_database_lives_on_an_internal_network(config: dict[str, Any]) -> None:
 
 
 def test_app_origin_matches_domain(config: dict[str, Any]) -> None:
-    assert config["services"]["app"]["environment"]["MKMONEY_ALLOWED_ORIGINS"] == "https://money.kangmin.kr"
+    assert config["services"]["app"]["environment"]["MKMONEY_ALLOWED_ORIGINS"] == (
+        "https://money.kangmin.kr,https://money.kangmin.kr:8443"
+    )
 
 
-def test_missing_bind_ip_is_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("name", ["LAN_BIND_IP", "TAILNET_BIND_IP"])
+def test_missing_bind_ip_is_refused(tmp_path: Path, name: str) -> None:
+    """바인드 IP가 빠지면 0.0.0.0으로 열리지 않고 설정 자체가 거부되어야 한다."""
     env = tmp_path / "no-bind.env"
     env.write_text("\n".join(
-        line for line in (ROOT / ".env.example").read_text().splitlines() if not line.startswith("LAN_BIND_IP=")
+        line for line in (ROOT / ".env.example").read_text().splitlines() if not line.startswith(f"{name}=")
     ))
     result = render(env)
-    assert result.returncode != 0 and "LAN_BIND_IP" in result.stderr
+    assert result.returncode != 0 and name in result.stderr
 
 
 def test_docker_context_is_an_allowlist_that_excludes_private_data() -> None:

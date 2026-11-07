@@ -1,6 +1,7 @@
 # 운영 스택(집 안 서버, 사설 LAN 전용). 실행: make deploy  (사용자 승인 후)
 # - DB·앱은 호스트 포트를 열지 않는다. DB는 외부와 단절된 내부 네트워크에만 둔다.
-# - 프록시(Caddy)만 LAN_BIND_IP:443에 바인드한다. 와일드카드(0.0.0.0) 기본값 없음.
+# - 프록시(Caddy)만 LAN_BIND_IP:443(집 LAN)과 TAILNET_BIND_IP:8443(Tailscale, 외부 접속용 — 443은 tailscale serve가 사용 중)에 바인드한다.
+#   와일드카드(0.0.0.0) 기본값 없음 — 둘 다 누락 시 설정을 거부한다.
 name: mkmoney-prod
 
 services:
@@ -30,7 +31,8 @@ services:
       MKMONEY_DATABASE_URL: postgresql+psycopg://mkmoney:${POSTGRES_PASSWORD}@db:5432/mkmoney
       MKMONEY_PASSWORD_HASH: ${MKMONEY_PASSWORD_HASH:?MKMONEY_PASSWORD_HASH가 필요합니다}
       MKMONEY_SESSION_SECRET: ${MKMONEY_SESSION_SECRET:?MKMONEY_SESSION_SECRET이 필요합니다}
-      MKMONEY_ALLOWED_ORIGINS: https://${MKMONEY_DOMAIN:?MKMONEY_DOMAIN이 필요합니다}
+      # LAN(443)과 Tailscale(8443) 두 출처를 허용한다.
+      MKMONEY_ALLOWED_ORIGINS: https://${MKMONEY_DOMAIN:?MKMONEY_DOMAIN이 필요합니다},https://${MKMONEY_DOMAIN}:8443
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +43,7 @@ services:
     restart: unless-stopped
     ports:
       - "${LAN_BIND_IP:?LAN_BIND_IP(사설 LAN IP)가 필요합니다}:443:443/tcp"
+      - "${TAILNET_BIND_IP:?TAILNET_BIND_IP(이 서버의 Tailscale IPv4)가 필요합니다}:8443:443/tcp"
     environment:
       MKMONEY_DOMAIN: ${MKMONEY_DOMAIN}
     volumes:
